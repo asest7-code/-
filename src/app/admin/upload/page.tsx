@@ -26,8 +26,44 @@ type ParsedUploadState = {
 };
 
 const previewColumns = ["date", "platform", "campaignName", "adGroupName", "adName", "impressions", "clicks", "cost", "conversions", "revenue"];
-const CLIENT_UPLOAD_CHUNK_SIZE = 200;
-const MAX_PARALLEL_UPLOADS = 3;
+const CLIENT_UPLOAD_CHUNK_SIZE = 1000;
+const MAX_PARALLEL_UPLOADS = 2;
+
+function makeRowKey(row: Pick<ReportRow, "date" | "platform" | "campaignName" | "adGroupName" | "adName">) {
+  return [row.date, row.platform, row.campaignName, row.adGroupName, row.adName].join("::");
+}
+
+function mergeRowsInBrowser(rows: ReportRow[]) {
+  const merged = new Map<string, ReportRow>();
+
+  for (const row of rows) {
+    const key = makeRowKey(row);
+    const current = merged.get(key);
+
+    if (!current) {
+      merged.set(key, { ...row });
+      continue;
+    }
+
+    merged.set(key, {
+      ...current,
+      device: current.device ?? row.device ?? null,
+      keyword: current.keyword ?? row.keyword ?? null,
+      creativeName: current.creativeName ?? row.creativeName ?? null,
+      landingPage: current.landingPage ?? row.landingPage ?? null,
+      memo: current.memo ?? row.memo ?? null,
+      impressions: current.impressions + row.impressions,
+      clicks: current.clicks + row.clicks,
+      cost: current.cost + row.cost,
+      conversions: current.conversions + row.conversions,
+      revenue: current.revenue + row.revenue,
+      purchases: (current.purchases ?? 0) + (row.purchases ?? 0),
+      leads: (current.leads ?? 0) + (row.leads ?? 0)
+    });
+  }
+
+  return [...merged.values()];
+}
 
 async function parseResponsePayload(response: Response) {
   const text = await response.text();
@@ -179,9 +215,11 @@ export default function UploadPage() {
         return;
       }
 
+      const uploadRows = mergeRowsInBrowser(parsed.rows);
+
       const chunks: ReportRow[][] = [];
-      for (let index = 0; index < parsed.rows.length; index += CLIENT_UPLOAD_CHUNK_SIZE) {
-        chunks.push(parsed.rows.slice(index, index + CLIENT_UPLOAD_CHUNK_SIZE));
+      for (let index = 0; index < uploadRows.length; index += CLIENT_UPLOAD_CHUNK_SIZE) {
+        chunks.push(uploadRows.slice(index, index + CLIENT_UPLOAD_CHUNK_SIZE));
       }
 
       const totalChunks = chunks.length;
@@ -247,7 +285,11 @@ export default function UploadPage() {
         throw new Error(typeof finalizeData.error === "string" ? finalizeData.error : `업로드 완료 처리 중 오류가 발생했습니다. (HTTP ${finalizeResponse.status})`);
       }
 
-      setMessage(`${parsed.rows.length.toLocaleString("ko-KR")}행 업로드가 완료되었습니다.`);
+      setMessage(
+        uploadRows.length === parsed.rows.length
+          ? `${parsed.rows.length.toLocaleString("ko-KR")}행 업로드가 완료되었습니다.`
+          : `중복 병합 후 ${uploadRows.length.toLocaleString("ko-KR")}행으로 업로드가 완료되었습니다. (원본 ${parsed.rows.length.toLocaleString("ko-KR")}행)`
+      );
       await loadUploads();
     } catch (error) {
       setErrors([error instanceof Error ? error.message : "업로드 저장 중 오류가 발생했습니다."]);

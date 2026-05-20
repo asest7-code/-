@@ -484,64 +484,76 @@ function reportMatchesComposite(report: { clientId: string; date: string; platfo
 
 export async function upsertReports(clientId: string, rows: ReportRow[], uploadId: string) {
   if (await canUsePrisma()) {
-    for (let index = 0; index < rows.length; index += REPORT_UPSERT_BATCH_SIZE) {
-      const chunk = mergeDuplicateReportRows(rows.slice(index, index + REPORT_UPSERT_BATCH_SIZE));
-      await prisma.$transaction(
-        chunk.map((row) =>
-          prisma.campaignReport.upsert({
-            where: {
-              clientId_date_platform_campaignName_adGroupName_adName: {
-                clientId,
-                date: new Date(`${row.date}T00:00:00.000Z`),
-                platform: row.platform,
-                campaignName: row.campaignName,
-                adGroupName: row.adGroupName,
-                adName: row.adName
-              }
-            },
-            update: {
-              date: new Date(`${row.date}T00:00:00.000Z`),
-              platform: row.platform,
-              campaignName: row.campaignName,
-              adGroupName: row.adGroupName,
-              adName: row.adName,
-              device: row.device ?? null,
-              keyword: row.keyword ?? null,
-              creativeName: row.creativeName ?? null,
-              landingPage: row.landingPage ?? null,
-              impressions: row.impressions,
-              clicks: row.clicks,
-              cost: row.cost,
-              conversions: row.conversions,
-              revenue: row.revenue,
-              purchases: row.purchases ?? null,
-              leads: row.leads ?? null,
-              memo: row.memo ?? null,
-              uploadId
-            },
-            create: {
-              clientId,
-              date: new Date(`${row.date}T00:00:00.000Z`),
-              platform: row.platform,
-              campaignName: row.campaignName,
-              adGroupName: row.adGroupName,
-              adName: row.adName,
-              device: row.device ?? null,
-              keyword: row.keyword ?? null,
-              creativeName: row.creativeName ?? null,
-              landingPage: row.landingPage ?? null,
-              impressions: row.impressions,
-              clicks: row.clicks,
-              cost: row.cost,
-              conversions: row.conversions,
-              revenue: row.revenue,
-              purchases: row.purchases ?? null,
-              leads: row.leads ?? null,
-              memo: row.memo ?? null,
-              uploadId
-            }
-          })
-        )
+    const mergedRows = mergeDuplicateReportRows(rows);
+
+    for (let index = 0; index < mergedRows.length; index += REPORT_UPSERT_BATCH_SIZE) {
+      const chunk = mergedRows.slice(index, index + REPORT_UPSERT_BATCH_SIZE);
+      const values = chunk.map((row) => {
+        const reportDate = new Date(`${row.date}T00:00:00.000Z`);
+        return Prisma.sql`(
+          ${clientId},
+          ${reportDate},
+          ${row.platform},
+          ${row.campaignName},
+          ${row.adGroupName},
+          ${row.adName},
+          ${row.device ?? null},
+          ${row.keyword ?? null},
+          ${row.creativeName ?? null},
+          ${row.landingPage ?? null},
+          ${row.impressions},
+          ${row.clicks},
+          ${row.cost},
+          ${row.conversions},
+          ${row.revenue},
+          ${row.purchases ?? null},
+          ${row.leads ?? null},
+          ${row.memo ?? null},
+          ${uploadId}
+        )`;
+      });
+
+      await prisma.$executeRaw(
+        Prisma.sql`
+          INSERT INTO "CampaignReport" (
+            "clientId",
+            "date",
+            "platform",
+            "campaignName",
+            "adGroupName",
+            "adName",
+            "device",
+            "keyword",
+            "creativeName",
+            "landingPage",
+            "impressions",
+            "clicks",
+            "cost",
+            "conversions",
+            "revenue",
+            "purchases",
+            "leads",
+            "memo",
+            "uploadId"
+          )
+          VALUES ${Prisma.join(values)}
+          ON CONFLICT ("clientId", "date", "platform", "campaignName", "adGroupName", "adName")
+          DO UPDATE SET
+            "device" = EXCLUDED."device",
+            "keyword" = EXCLUDED."keyword",
+            "creativeName" = EXCLUDED."creativeName",
+            "landingPage" = EXCLUDED."landingPage",
+            "impressions" = EXCLUDED."impressions",
+            "clicks" = EXCLUDED."clicks",
+            "cost" = EXCLUDED."cost",
+            "conversions" = EXCLUDED."conversions",
+            "revenue" = EXCLUDED."revenue",
+            "purchases" = EXCLUDED."purchases",
+            "leads" = EXCLUDED."leads",
+            "memo" = EXCLUDED."memo",
+            "uploadId" = EXCLUDED."uploadId",
+            "updatedAt" = NOW()
+        `
       );
     }
     return;
