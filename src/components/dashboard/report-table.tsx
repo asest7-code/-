@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { DashboardPayload } from "@/types/dashboard";
-import { calculateMetrics, currency } from "@/utils/metrics";
-
-type ReportTableProps = {
-  rows: DashboardPayload["rows"];
-};
+import { currency } from "@/utils/metrics";
 
 type GroupMode = "date" | "campaign" | "adGroup";
 type SortKey = "dateDesc" | "cost" | "revenue" | "conversions" | "clicks" | "roas";
+
+type FilterState = {
+  startDate: string;
+  endDate: string;
+  platform: string;
+  campaign: string;
+};
 
 type TrendValue = {
   cost: number | null;
@@ -18,44 +20,91 @@ type TrendValue = {
   roas: number | null;
 };
 
-type AggregatedRow = {
+type TableRow = {
   id: string;
   date: string;
   platform: string;
   campaignName: string;
   adGroupName: string;
   rowCount: number;
-  metrics: ReturnType<typeof calculateMetrics>;
+  metrics: {
+    cost: number;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    revenue: number;
+    ctr: number;
+    cpc: number;
+    cpm: number;
+    cpa: number;
+    cvr: number;
+    roas: number;
+  };
   dayOverDay?: TrendValue | null;
 };
 
-const pageSize = 15;
+type ReportTableProps = {
+  clientSlug: string;
+  filters: FilterState;
+  password?: string;
+};
 
-export function ReportTable({ rows }: ReportTableProps) {
+export function ReportTable({ clientSlug, filters, password = "" }: ReportTableProps) {
   const [groupMode, setGroupMode] = useState<GroupMode>("date");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>("dateDesc");
+  const [rows, setRows] = useState<TableRow[]>([]);
+  const [pageCount, setPageCount] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const aggregatedRows = useMemo(() => aggregateRows(rows, groupMode), [rows, groupMode]);
-
-  const filteredRows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const matched = normalizedQuery
-      ? aggregatedRows.filter((row) =>
-          [row.date, row.platform, row.campaignName, row.adGroupName].join(" ").toLowerCase().includes(normalizedQuery)
-        )
-      : aggregatedRows;
-
-    return [...matched].sort((a, b) => sortRows(a, b, sortKey));
-  }, [aggregatedRows, query, sortKey]);
+  const requestQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("groupMode", groupMode);
+    params.set("sortKey", sortKey);
+    params.set("page", String(page));
+    if (query.trim()) params.set("query", query.trim());
+    if (filters.startDate) params.set("startDate", filters.startDate);
+    if (filters.endDate) params.set("endDate", filters.endDate);
+    if (filters.platform !== "ALL") params.set("platform", filters.platform);
+    if (filters.campaign !== "ALL") params.set("campaign", filters.campaign);
+    if (password) params.set("password", password);
+    return params.toString();
+  }, [filters.campaign, filters.endDate, filters.platform, filters.startDate, groupMode, page, password, query, sortKey]);
 
   useEffect(() => {
     setPage(1);
-  }, [rows, query, sortKey, groupMode]);
+  }, [filters.startDate, filters.endDate, filters.platform, filters.campaign, groupMode, sortKey, query]);
 
-  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadTable() {
+      setLoading(true);
+
+      const response = await fetch(`/api/dashboard/${clientSlug}/table?${requestQuery}`);
+      const data = (await response.json()) as {
+        rows: TableRow[];
+        total: number;
+        page: number;
+        pageCount: number;
+      };
+
+      if (ignore) return;
+
+      setRows(data.rows ?? []);
+      setTotal(data.total ?? 0);
+      setPageCount(data.pageCount ?? 1);
+      setLoading(false);
+    }
+
+    void loadTable();
+
+    return () => {
+      ignore = true;
+    };
+  }, [clientSlug, requestQuery]);
 
   return (
     <section className="panel overflow-hidden">
@@ -63,16 +112,11 @@ export function ReportTable({ rows }: ReportTableProps) {
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             <h2 className="font-bold text-slate-950">상세 성과 테이블</h2>
-            <p className="mt-1 text-sm text-slate-500">일자 기준으로 매체, 캠페인, 그룹 성과를 나눠서 확인할 수 있습니다.</p>
+            <p className="mt-1 text-sm text-slate-500">일자 기준으로 매체, 캠페인, 그룹 성과를 확인할 수 있습니다.</p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              className="input w-full sm:w-64"
-              placeholder="일자, 매체, 캠페인, 그룹 검색"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
+            <input className="input w-full sm:w-64" placeholder="일자, 매체, 캠페인, 그룹 검색" value={query} onChange={(event) => setQuery(event.target.value)} />
             <select className="input w-full sm:w-40" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
               <option value="dateDesc">최신순</option>
               <option value="cost">광고비순</option>
@@ -103,6 +147,8 @@ export function ReportTable({ rows }: ReportTableProps) {
         </div>
       </div>
 
+      {loading ? <div className="border-b px-4 py-3 text-sm text-slate-500">테이블을 불러오는 중입니다.</div> : null}
+
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1480px] text-left text-xs">
           <thead className="bg-slate-50 text-slate-500">
@@ -132,7 +178,7 @@ export function ReportTable({ rows }: ReportTableProps) {
             </tr>
           </thead>
           <tbody>
-            {pageRows.map((row) => (
+            {rows.map((row) => (
               <tr key={row.id} className="border-t">
                 <td className="px-3 py-3 font-semibold text-slate-900">{row.date}</td>
                 <td className="px-3 py-3">{row.platform}</td>
@@ -158,7 +204,7 @@ export function ReportTable({ rows }: ReportTableProps) {
                 ) : null}
               </tr>
             ))}
-            {pageRows.length === 0 ? (
+            {rows.length === 0 && !loading ? (
               <tr>
                 <td colSpan={groupMode === "date" ? 18 : 14} className="px-3 py-10 text-center text-sm text-slate-500">
                   조건에 맞는 데이터가 없습니다.
@@ -171,91 +217,19 @@ export function ReportTable({ rows }: ReportTableProps) {
 
       <div className="flex items-center justify-between border-t p-4 text-sm">
         <span>
-          총 {filteredRows.length.toLocaleString("ko-KR")}개 / {page}페이지
+          총 {total.toLocaleString("ko-KR")}개 / {page}페이지
         </span>
         <div className="flex gap-2">
-          <button className="btn-secondary" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+          <button className="btn-secondary" disabled={page === 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>
             이전
           </button>
-          <button
-            className="btn-secondary"
-            disabled={page === pageCount}
-            onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
-          >
+          <button className="btn-secondary" disabled={page === pageCount || loading} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>
             다음
           </button>
         </div>
       </div>
     </section>
   );
-}
-
-function aggregateRows(rows: DashboardPayload["rows"], mode: GroupMode): AggregatedRow[] {
-  const grouped = new Map<string, DashboardPayload["rows"]>();
-
-  rows.forEach((row) => {
-    const key =
-      mode === "date"
-        ? [row.date, row.platform].join("__")
-        : mode === "campaign"
-          ? [row.date, row.platform, row.campaignName].join("__")
-          : [row.date, row.platform, row.campaignName, row.adGroupName].join("__");
-
-    const current = grouped.get(key) ?? [];
-    current.push(row);
-    grouped.set(key, current);
-  });
-
-  const aggregated = Array.from(grouped.entries()).map(([key, groupedRows]) => {
-    const [date, platform, campaignName = "", adGroupName = ""] = key.split("__");
-
-    return {
-      id: `${mode}-${key}`,
-      date,
-      platform,
-      campaignName: mode === "date" ? "-" : campaignName,
-      adGroupName: mode === "adGroup" ? adGroupName : "-",
-      rowCount: groupedRows.length,
-      metrics: calculateMetrics(groupedRows)
-    } satisfies AggregatedRow;
-  });
-
-  if (mode !== "date") {
-    return aggregated;
-  }
-
-  const byPlatform = new Map<string, AggregatedRow[]>();
-  aggregated.forEach((row) => {
-    const current = byPlatform.get(row.platform) ?? [];
-    current.push(row);
-    byPlatform.set(row.platform, current);
-  });
-
-  const trendMap = new Map<string, TrendValue>();
-
-  byPlatform.forEach((platformRows) => {
-    const sorted = [...platformRows].sort((a, b) => a.date.localeCompare(b.date));
-    sorted.forEach((row, index) => {
-      const previous = sorted[index - 1];
-      trendMap.set(row.id, {
-        cost: previous ? row.metrics.cost - previous.metrics.cost : null,
-        conversions: previous ? row.metrics.conversions - previous.metrics.conversions : null,
-        revenue: previous ? row.metrics.revenue - previous.metrics.revenue : null,
-        roas: previous ? row.metrics.roas - previous.metrics.roas : null
-      });
-    });
-  });
-
-  return aggregated.map((row) => ({ ...row, dayOverDay: trendMap.get(row.id) ?? null }));
-}
-
-function sortRows(a: AggregatedRow, b: AggregatedRow, sortKey: SortKey) {
-  if (sortKey === "dateDesc") {
-    if (a.date !== b.date) return b.date.localeCompare(a.date);
-    return a.platform.localeCompare(b.platform);
-  }
-
-  return Number(b.metrics[sortKey]) - Number(a.metrics[sortKey]);
 }
 
 function formatDelta(value: number | null | undefined, format: "currency" | "number" | "percent") {

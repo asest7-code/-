@@ -292,7 +292,7 @@ export function DashboardContent({
         {reportMode ? <ReportSummary payload={payload} /> : null}
         <DashboardInsights payload={payload} />
         <DashboardCharts payload={payload} />
-        <ReportTable rows={payload.rows} />
+        <ReportTable clientSlug={clientSlug} filters={filters} password={password} />
       </div>
     </main>
   );
