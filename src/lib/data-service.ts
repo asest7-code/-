@@ -34,6 +34,10 @@ type ReportUpdateInput = {
 
 let prismaAvailablePromise: Promise<boolean> | null = null;
 
+function isVercelRuntime() {
+  return Boolean(process.env.VERCEL);
+}
+
 async function canUsePrisma() {
   if (!prismaAvailablePromise) {
     prismaAvailablePromise = prisma
@@ -66,6 +70,9 @@ export async function getUserByEmail(email: string) {
   if (usePrisma) {
     return prisma.user.findUnique({ where: { email } });
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const db = await readLocalDb();
   return db.users.find((user) => user.email === email) ?? null;
 }
@@ -74,6 +81,9 @@ export async function getClientBySlug(slug: string) {
   if (await canUsePrisma()) {
     return prisma.client.findUnique({ where: { slug } });
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const db = await readLocalDb();
   return db.clients.find((client) => client.slug === slug) ?? null;
 }
@@ -81,6 +91,9 @@ export async function getClientBySlug(slug: string) {
 export async function getClientById(id: string) {
   if (await canUsePrisma()) {
     return prisma.client.findUnique({ where: { id } });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const db = await readLocalDb();
   return db.clients.find((client) => client.id === id) ?? null;
@@ -92,6 +105,9 @@ export async function listClients() {
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { campaignReports: true, uploadHistories: true } } }
     });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const db = await readLocalDb();
   return db.clients
@@ -118,6 +134,9 @@ export async function createClient(input: ClientInput) {
         sharePasswordHash
       }
     });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
 
   const db = await readLocalDb();
@@ -153,6 +172,9 @@ export async function updateClient(id: string, input: ClientInput) {
     if (nextSharePasswordHash) data.sharePasswordHash = nextSharePasswordHash;
     return prisma.client.update({ where: { id }, data });
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
 
   const db = await readLocalDb();
   const index = db.clients.findIndex((client) => client.id === id);
@@ -179,6 +201,9 @@ export async function deleteClient(id: string) {
     await prisma.client.delete({ where: { id } });
     return;
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const db = await readLocalDb();
   db.clients = db.clients.filter((client) => client.id !== id);
   db.reports = db.reports.filter((report) => report.clientId !== id);
@@ -189,6 +214,9 @@ export async function deleteClient(id: string) {
 
 export async function countClients() {
   if (await canUsePrisma()) return prisma.client.count();
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const db = await readLocalDb();
   return db.clients.length;
 }
@@ -199,6 +227,9 @@ export async function listReportsByClient(clientId: string) {
       where: { clientId },
       orderBy: [{ date: "asc" }, { platform: "asc" }, { campaignName: "asc" }]
     });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const db = await readLocalDb();
   return db.reports
@@ -213,6 +244,9 @@ export async function getReportDateRange(clientId: string) {
       _min: { date: true },
       _max: { date: true }
     });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const reports = await listReportsByClient(clientId);
   if (reports.length === 0) return { _min: { date: null }, _max: { date: null } };
@@ -229,6 +263,9 @@ export async function listDistinctClientOptions(clientId: string) {
       select: { platform: true, campaignName: true },
       distinct: ["platform", "campaignName"]
     });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const reports = await listReportsByClient(clientId);
   const seen = new Set<string>();
@@ -265,6 +302,9 @@ export async function listScopedReports(params: {
       orderBy: [{ date: "asc" }, { platform: "asc" }, { campaignName: "asc" }]
     });
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const reports = await listReportsByClient(params.clientId);
   return reports.filter((report) => {
     if (params.startDate && report.date < params.startDate) return false;
@@ -279,6 +319,9 @@ export async function listRecentUploads(take = 6) {
   if (await canUsePrisma()) {
     return prisma.uploadHistory.findMany({ orderBy: { createdAt: "desc" }, take, include: { client: true } });
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const db = await readLocalDb();
   return db.uploads
     .slice()
@@ -292,6 +335,9 @@ export async function listRecentUploads(take = 6) {
 
 export async function listAllReports() {
   if (await canUsePrisma()) return prisma.campaignReport.findMany();
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const db = await readLocalDb();
   return db.reports;
 }
@@ -299,6 +345,9 @@ export async function listAllReports() {
 export async function createUploadHistory(data: { clientId: string; fileName: string; rowCount: number; status: string; uploadedBy?: string | null }) {
   if (await canUsePrisma()) {
     return prisma.uploadHistory.create({ data });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const db = await readLocalDb();
   const upload = {
@@ -347,6 +396,9 @@ export async function upsertReports(clientId: string, rows: ReportRow[], uploadI
       )
     );
     return;
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
 
   const db = await readLocalDb();
@@ -397,6 +449,9 @@ export async function createAccessLog(clientId: string, ipAddress: string | null
     });
     return;
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
   const db = await readLocalDb();
   db.accessLogs.push({
     id: makeLocalId(),
@@ -440,6 +495,9 @@ export async function listEditableReports(params: { clientId?: string; query?: s
     ]);
     return { total, rows };
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
 
   const db = await readLocalDb();
   let rows = db.reports.map((report) => ({
@@ -463,6 +521,9 @@ export async function listEditableReports(params: { clientId?: string; query?: s
 export async function getEditableReportById(id: string) {
   if (await canUsePrisma()) {
     return prisma.campaignReport.findUnique({ where: { id }, include: { client: true } });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const db = await readLocalDb();
   const report = db.reports.find((item) => item.id === id);
@@ -495,6 +556,9 @@ export async function updateReport(id: string, input: ReportUpdateInput) {
       }
     });
   }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
 
   const db = await readLocalDb();
   const index = db.reports.findIndex((report) => report.id === id);
@@ -519,6 +583,9 @@ export async function deleteReport(id: string) {
   if (await canUsePrisma()) {
     await prisma.campaignReport.delete({ where: { id } });
     return;
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
   }
   const db = await readLocalDb();
   db.reports = db.reports.filter((report) => report.id !== id);
