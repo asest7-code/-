@@ -6,7 +6,6 @@ import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { ReportTable } from "@/components/dashboard/report-table";
-import { deriveDashboardPayload } from "@/lib/dashboard-derive";
 import type { DashboardPayload } from "@/types/dashboard";
 
 type FilterState = {
@@ -57,22 +56,26 @@ function formatRangeLabel(startDate: string, endDate: string) {
 }
 
 export function DashboardView({ clientSlug, reportMode = false }: { clientSlug: string; reportMode?: boolean }) {
-  const [basePayload, setBasePayload] = useState<DashboardPayload | null>(null);
+  const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [password, setPassword] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
   const [passwordRequired, setPasswordRequired] = useState(false);
   const [filters, setFilters] = useState<FilterState>({ startDate: "", endDate: "", platform: "ALL", campaign: "ALL" });
   const [loading, setLoading] = useState(true);
 
-  async function loadDashboard(nextPassword?: string) {
+  async function loadDashboard(nextPassword?: string, nextFilters?: FilterState) {
     setLoading(true);
     const params = new URLSearchParams();
     if (nextPassword) params.set("password", nextPassword);
+    if (nextFilters?.startDate) params.set("startDate", nextFilters.startDate);
+    if (nextFilters?.endDate) params.set("endDate", nextFilters.endDate);
+    if (nextFilters?.platform && nextFilters.platform !== "ALL") params.set("platform", nextFilters.platform);
+    if (nextFilters?.campaign && nextFilters.campaign !== "ALL") params.set("campaign", nextFilters.campaign);
 
     const response = await fetch(`/api/dashboard/${clientSlug}${params.toString() ? `?${params.toString()}` : ""}`);
 
     if (response.status === 404) {
-      setBasePayload(null);
+      setPayload(null);
       setPasswordRequired(false);
       setLoading(false);
       return;
@@ -85,23 +88,28 @@ export function DashboardView({ clientSlug, reportMode = false }: { clientSlug: 
     }
 
     if (!response.ok) {
-      setBasePayload(null);
+      setPayload(null);
       setPasswordRequired(false);
       setLoading(false);
       return;
     }
 
     const data = (await response.json()) as DashboardPayload;
-    setBasePayload(data);
+    setPayload(data);
     setPasswordRequired(false);
     if (nextPassword) setPassword(nextPassword);
     setFilters({
-      startDate: data.filters.startDate ?? "",
-      endDate: data.filters.endDate ?? "",
-      platform: "ALL",
-      campaign: "ALL"
+      startDate: nextFilters?.startDate ?? data.filters.startDate ?? "",
+      endDate: nextFilters?.endDate ?? data.filters.endDate ?? "",
+      platform: nextFilters?.platform ?? "ALL",
+      campaign: nextFilters?.campaign ?? "ALL"
     });
     setLoading(false);
+  }
+
+  function applyFilters(nextFilters: FilterState) {
+    setFilters(nextFilters);
+    void loadDashboard(password, nextFilters);
   }
 
   useEffect(() => {
@@ -131,7 +139,7 @@ export function DashboardView({ clientSlug, reportMode = false }: { clientSlug: 
     return <main className="p-8 text-sm font-semibold text-slate-500">대시보드를 불러오는 중입니다.</main>;
   }
 
-  if (!basePayload) {
+  if (!payload) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <section className="panel max-w-lg p-8 text-center">
@@ -142,13 +150,7 @@ export function DashboardView({ clientSlug, reportMode = false }: { clientSlug: 
     );
   }
 
-  const payload = deriveDashboardPayload({
-    client: basePayload.client,
-    rows: basePayload.sourceRows,
-    filters
-  });
-
-  return <DashboardContent clientSlug={clientSlug} payload={payload} filters={filters} setFilters={setFilters} reportMode={reportMode} password={password} />;
+  return <DashboardContent clientSlug={clientSlug} payload={payload} filters={filters} setFilters={applyFilters} reportMode={reportMode} password={password} />;
 }
 
 export function DashboardContent({
