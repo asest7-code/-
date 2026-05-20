@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String?
+  email        String   @unique
+  passwordHash String
+  role         String   @default("ADMIN")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  uploads UploadHistory[]
+}
+
+model Client {
+  id                    String   @id @default(cuid())
+  name                  String
+  slug                  String   @unique
+  logoUrl               String?
+  sharePasswordHash     String?
+  isPasswordProtected   Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  adAccounts      AdAccount[]
+  campaignReports CampaignReport[]
+  uploadHistories UploadHistory[]
+  accessLogs      ClientAccessLog[]
+}
+
+model AdAccount {
+  id                String   @id @default(cuid())
+  clientId          String
+  platform          String
+  accountName       String
+  externalAccountId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model CampaignReport {
+  id           String   @id @default(cuid())
+  clientId     String
+  date         DateTime
+  platform     String
+  campaignName String
+  adGroupName  String
+  adName       String
+  device       String?
+  keyword      String?
+  creativeName String?
+  landingPage  String?
+  impressions  Int
+  clicks       Int
+  cost         Float
+  conversions  Float
+  revenue      Float
+  purchases    Float?
+  leads        Float?
+  memo         String?
+  uploadId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  upload UploadHistory? @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  @@unique([clientId, date, platform, campaignName, adGroupName, adName])
+  @@index([clientId, date])
+  @@index([clientId, platform])
+  @@index([clientId, campaignName])
+}
+
+model UploadHistory {
+  id         String       @id @default(cuid())
+  clientId   String
+  fileName   String
+  rowCount   Int
+  status     String
+  uploadedBy String?
+  createdAt  DateTime     @default(now())
+
+  client  Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user    User?  @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+  reports CampaignReport[]
+
+  @@index([clientId])
+  @@index([createdAt])
+}
+
+model ClientAccessLog {
+  id        String   @id @default(cuid())
+  clientId  String
+  accessedAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([accessedAt])
+}
