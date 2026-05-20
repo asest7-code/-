@@ -18,11 +18,27 @@ export const uploadSources: UploadSourceDefinition[] = [
     filenameHints: ["naver", "\uB124\uC774\uBC84", "\uAC80\uC0C9\uC5B4", "sa", "gfa"],
     sheetHints: ["naver", "\uB124\uC774\uBC84"],
     aliases: {
-      date: ["date", "\uC77C\uC790", "\uB0A0\uC9DC", "\uC77C\uBCC4"],
+      date: ["date", "\uC77C\uC790", "\uB0A0\uC9DC", "\uC77C\uBCC4", "\uAE30\uAC04"],
       platform: ["platform", "\uB9E4\uCCB4", "\uAD11\uACE0\uB9E4\uCCB4"],
-      campaign_name: ["campaign_name", "campaign", "\uCEA0\uD398\uC778", "\uCEA0\uD398\uC778\uBA85"],
-      ad_group_name: ["ad_group_name", "adgroup", "\uAD11\uACE0\uADF8\uB8F9", "\uAD11\uACE0\uADF8\uB8F9\uBA85", "\uADF8\uB8F9\uBA85"],
-      ad_name: ["ad_name", "ad", "\uC18C\uC7AC", "\uC18C\uC7AC\uBA85", "\uAD11\uACE0\uBA85", "\uAC80\uC0C9\uC5B4"],
+      campaign_name: ["campaign_name", "campaign", "\uCEA0\uD398\uC778", "\uCEA0\uD398\uC778\uBA85", "\uCEA0\uD398\uC778 \uC774\uB984"],
+      ad_group_name: [
+        "ad_group_name",
+        "adgroup",
+        "\uAD11\uACE0\uADF8\uB8F9",
+        "\uAD11\uACE0\uADF8\uB8F9\uBA85",
+        "\uAD11\uACE0 \uADF8\uB8F9 \uC774\uB984",
+        "\uADF8\uB8F9\uBA85"
+      ],
+      ad_name: [
+        "ad_name",
+        "ad",
+        "\uC18C\uC7AC",
+        "\uC18C\uC7AC\uBA85",
+        "\uAD11\uACE0\uC18C\uC7AC\uC774\uB984",
+        "\uAD11\uACE0 \uC18C\uC7AC \uC774\uB984",
+        "\uAD11\uACE0\uBA85",
+        "\uAC80\uC0C9\uC5B4"
+      ],
       impressions: ["impressions", "\uB178\uCD9C", "\uB178\uCD9C\uC218"],
       clicks: ["clicks", "\uD074\uB9AD", "\uD074\uB9AD\uC218"],
       cost: ["cost", "\uAD11\uACE0\uBE44", "\uBE44\uC6A9", "\uCD1D\uBE44\uC6A9"],
@@ -30,6 +46,9 @@ export const uploadSources: UploadSourceDefinition[] = [
         "conversions",
         "\uC804\uD658",
         "\uC804\uD658\uC218",
+        "\uACB0\uACFC",
+        "\uAD6C\uB9E4\uC644\uB8CC \uC218",
+        "\uAD6C\uB9E4\uC644\uB8CC\uC218",
         "\uAD6C\uB9E4\uC644\uB8CC \uC804\uD658\uC218",
         "\uAD6C\uB9E4\uC644\uB8CC\uC804\uD658\uC218"
       ],
@@ -37,10 +56,11 @@ export const uploadSources: UploadSourceDefinition[] = [
         "revenue",
         "\uB9E4\uCD9C",
         "\uC804\uD658\uB9E4\uCD9C",
+        "\uAD6C\uB9E4\uC644\uB8CC \uC804\uD658\uB9E4\uCD9C\uC561",
+        "\uAD6C\uB9E4\uC644\uB8CC\uC804\uD658\uB9E4\uCD9C\uC561",
         "\uAD6C\uB9E4\uC644\uB8CC \uC804\uD658\uB9E4\uCD9C\uC561(\uC6D0)",
         "\uAD6C\uB9E4\uC644\uB8CC\uC804\uD658\uB9E4\uCD9C\uC561\uC6D0",
-        "\uAD6C\uB9E4\uC644\uB8CC \uC804\uD658\uB9E4\uCD9C\uC561",
-        "\uAD6C\uB9E4\uC644\uB8CC\uC804\uD658\uB9E4\uCD9C\uC561"
+        "\uAD6C\uB9E4\uC644\uB8CC \uC804\uD658\uB9E4\uCD9C\uC561 (\uC6D0)"
       ],
       ...commonOptional
     },
