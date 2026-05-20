@@ -46,7 +46,6 @@ export const uploadSources: UploadSourceDefinition[] = [
         "conversions",
         "\uC804\uD658",
         "\uC804\uD658\uC218",
-        "\uACB0\uACFC",
         "\uAD6C\uB9E4\uC644\uB8CC \uC218",
         "\uAD6C\uB9E4\uC644\uB8CC\uC218",
         "\uAD6C\uB9E4\uC644\uB8CC \uC804\uD658\uC218",
