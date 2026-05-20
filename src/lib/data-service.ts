@@ -61,6 +61,42 @@ function toDateOnly(value: Date | string) {
   return value.toISOString().slice(0, 10);
 }
 
+function makeReportCompositeKey(row: Pick<ReportRow, "date" | "platform" | "campaignName" | "adGroupName" | "adName">) {
+  return [row.date, row.platform, row.campaignName, row.adGroupName, row.adName].join("::");
+}
+
+function mergeDuplicateReportRows(rows: ReportRow[]) {
+  const merged = new Map<string, ReportRow>();
+
+  for (const row of rows) {
+    const key = makeReportCompositeKey(row);
+    const current = merged.get(key);
+
+    if (!current) {
+      merged.set(key, { ...row });
+      continue;
+    }
+
+    merged.set(key, {
+      ...current,
+      device: current.device ?? row.device ?? null,
+      keyword: current.keyword ?? row.keyword ?? null,
+      creativeName: current.creativeName ?? row.creativeName ?? null,
+      landingPage: current.landingPage ?? row.landingPage ?? null,
+      memo: current.memo ?? row.memo ?? null,
+      impressions: current.impressions + row.impressions,
+      clicks: current.clicks + row.clicks,
+      cost: current.cost + row.cost,
+      conversions: current.conversions + row.conversions,
+      revenue: current.revenue + row.revenue,
+      purchases: (current.purchases ?? 0) + (row.purchases ?? 0),
+      leads: (current.leads ?? 0) + (row.leads ?? 0)
+    });
+  }
+
+  return [...merged.values()];
+}
+
 export async function getStorageMode() {
   return (await canUsePrisma()) ? "prisma" : "local";
 }
@@ -402,7 +438,7 @@ function reportMatchesComposite(report: { clientId: string; date: string; platfo
 export async function upsertReports(clientId: string, rows: ReportRow[], uploadId: string) {
   if (await canUsePrisma()) {
     for (let index = 0; index < rows.length; index += REPORT_UPSERT_BATCH_SIZE) {
-      const chunk = rows.slice(index, index + REPORT_UPSERT_BATCH_SIZE);
+      const chunk = mergeDuplicateReportRows(rows.slice(index, index + REPORT_UPSERT_BATCH_SIZE));
       const values = chunk.map((row) => {
         const date = new Date(`${row.date}T00:00:00.000Z`);
         const timestamp = new Date();
