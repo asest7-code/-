@@ -1,11 +1,58 @@
 import { NextResponse } from "next/server";
-import { createUploadHistory, upsertReports } from "@/lib/data-service";
+import { createUploadHistory, updateUploadHistoryStatus, upsertReports } from "@/lib/data-service";
 import { requireAdmin } from "@/lib/require-admin";
 import { parseUploadFile } from "@/services/upload";
+import type { ReportRow } from "@/types/dashboard";
+
+type ChunkUploadBody = {
+  clientId: string;
+  fileName: string;
+  rows: ReportRow[];
+  uploadId?: string;
+  rowCount: number;
+  detectedFormat?: string;
+  isFirstChunk?: boolean;
+  isLastChunk?: boolean;
+};
 
 export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = (await request.json()) as ChunkUploadBody;
+
+    if (!body.clientId || !Array.isArray(body.rows) || body.rows.length === 0 || !body.fileName) {
+      return NextResponse.json({ error: "Invalid chunk upload payload." }, { status: 400 });
+    }
+
+    let uploadId = body.uploadId;
+
+    if (!uploadId) {
+      const upload = await createUploadHistory({
+        clientId: body.clientId,
+        fileName: body.fileName,
+        rowCount: body.rowCount,
+        status: body.isLastChunk ? "SUCCESS" : "PROCESSING",
+        uploadedBy: session.user.id
+      });
+      uploadId = upload.id;
+    }
+
+    await upsertReports(body.clientId, body.rows, uploadId);
+
+    if (body.isLastChunk) {
+      await updateUploadHistoryStatus(uploadId, "SUCCESS");
+    }
+
+    return NextResponse.json({
+      uploadId,
+      rowCount: body.rows.length,
+      detectedFormat: body.detectedFormat ?? ""
+    });
+  }
 
   const formData = await request.formData();
   const clientId = String(formData.get("clientId") ?? "");

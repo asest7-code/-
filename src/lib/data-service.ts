@@ -366,6 +366,28 @@ export async function createUploadHistory(data: { clientId: string; fileName: st
   return upload;
 }
 
+export async function updateUploadHistoryStatus(id: string, status: string) {
+  if (await canUsePrisma()) {
+    return prisma.uploadHistory.update({
+      where: { id },
+      data: { status }
+    });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const db = await readLocalDb();
+  const index = db.uploads.findIndex((upload) => upload.id === id);
+  if (index === -1) throw new Error("Upload history not found.");
+  db.uploads[index] = {
+    ...db.uploads[index],
+    status
+  };
+  await writeLocalDb(db);
+  return db.uploads[index];
+}
+
 function reportMatchesComposite(report: { clientId: string; date: string; platform: string; campaignName: string; adGroupName: string; adName: string }, clientId: string, row: ReportRow) {
   return (
     report.clientId === clientId &&

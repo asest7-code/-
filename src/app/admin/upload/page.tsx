@@ -1,11 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { parseUploadFileInBrowser } from "@/services/upload/browser-parser";
+import type { ReportRow } from "@/types/dashboard";
 
 type Client = { id: string; name: string; slug: string };
 type PreviewRow = Record<string, string | number | null>;
 
 const previewColumns = ["date", "platform", "campaignName", "adGroupName", "adName", "impressions", "clicks", "cost", "conversions", "revenue"];
+const CLIENT_UPLOAD_CHUNK_SIZE = 500;
+
+type ParsedUploadState = {
+  rows: ReportRow[];
+  preview: ReportRow[];
+  detectedFormat: string;
+  errors: string[];
+};
 
 export default function UploadPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -17,6 +27,8 @@ export default function UploadPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [detectedFormat, setDetectedFormat] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progressText, setProgressText] = useState("");
+  const parsedRef = useRef<ParsedUploadState | null>(null);
 
   useEffect(() => {
     fetch("/api/clients")
@@ -27,39 +39,135 @@ export default function UploadPage() {
       });
   }, []);
 
-  async function upload(previewOnly: boolean) {
+  async function ensureParsedUpload() {
+    if (!file) return null;
+    if (parsedRef.current) return parsedRef.current;
+
+    setProgressText("파일을 브라우저에서 분석하는 중입니다...");
+    const parsed = await parseUploadFileInBrowser(file);
+    parsedRef.current = parsed;
+    setProgressText("");
+    return parsed;
+  }
+
+  async function previewFile() {
     if (!clientId || !file) return;
     setLoading(true);
     setErrors([]);
     setMessage("");
 
-    const formData = new FormData();
-    formData.append("clientId", clientId);
-    formData.append("file", file);
-    formData.append("previewOnly", String(previewOnly));
+    try {
+      const parsed = await ensureParsedUpload();
+      if (!parsed) return;
 
-    const response = await fetch("/api/upload", { method: "POST", body: formData });
-    const data = await response.json();
-    setLoading(false);
+      if (parsed.rows.length > 100000) {
+        setErrors(["한 번에 최대 100,000행까지 업로드할 수 있습니다."]);
+        setPreview(parsed.preview ?? []);
+        setDetectedFormat(parsed.detectedFormat ?? "");
+        setRowCount(parsed.rows.length);
+        return;
+      }
 
-    if (!response.ok) {
-      setErrors(data.errors ?? [data.error ?? "업로드 검증에 실패했습니다."]);
-      setPreview(data.preview ?? []);
-      setDetectedFormat(data.detectedFormat ?? "");
-      return;
+      if (parsed.errors.length > 0) {
+        setErrors(parsed.errors);
+        setPreview(parsed.preview ?? []);
+        setDetectedFormat(parsed.detectedFormat ?? "");
+        setRowCount(parsed.rows.length);
+        return;
+      }
+
+      setPreview(parsed.preview ?? []);
+      setRowCount(parsed.rows.length);
+      setDetectedFormat(parsed.detectedFormat ?? "");
+      setMessage(`${parsed.rows.length.toLocaleString("ko-KR")}행 검증이 완료되었습니다. 아래 미리보기를 확인해 주세요.`);
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : "업로드 파일을 분석하지 못했습니다."]);
+    } finally {
+      setLoading(false);
+      setProgressText("");
     }
+  }
 
-    setPreview(data.preview ?? []);
-    setRowCount(data.rowCount ?? 0);
-    setDetectedFormat(data.detectedFormat ?? "");
-    setMessage(previewOnly ? `${data.rowCount}행 검증이 완료되었습니다. 아래 미리보기를 확인해 주세요.` : `${data.rowCount}행 업로드가 완료되었습니다.`);
+  async function uploadConfirmed() {
+    if (!clientId || !file) return;
+    setLoading(true);
+    setErrors([]);
+    setMessage("");
+
+    try {
+      const parsed = await ensureParsedUpload();
+      if (!parsed) return;
+
+      if (parsed.rows.length > 100000) {
+        setErrors(["한 번에 최대 100,000행까지 업로드할 수 있습니다."]);
+        return;
+      }
+
+      if (parsed.errors.length > 0) {
+        setErrors(parsed.errors);
+        return;
+      }
+
+      let uploadId: string | undefined;
+
+      for (let index = 0; index < parsed.rows.length; index += CLIENT_UPLOAD_CHUNK_SIZE) {
+        const chunk = parsed.rows.slice(index, index + CLIENT_UPLOAD_CHUNK_SIZE);
+        const chunkNumber = Math.floor(index / CLIENT_UPLOAD_CHUNK_SIZE) + 1;
+        const totalChunks = Math.ceil(parsed.rows.length / CLIENT_UPLOAD_CHUNK_SIZE);
+
+        setProgressText(`업로드 중... ${chunkNumber}/${totalChunks}`);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            clientId,
+            fileName: file.name,
+            rows: chunk,
+            uploadId,
+            rowCount: parsed.rows.length,
+            detectedFormat: parsed.detectedFormat,
+            isFirstChunk: index === 0,
+            isLastChunk: index + CLIENT_UPLOAD_CHUNK_SIZE >= parsed.rows.length
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "업로드 저장 중 오류가 발생했습니다.");
+        }
+
+        uploadId = data.uploadId ?? uploadId;
+      }
+
+      setMessage(`${parsed.rows.length.toLocaleString("ko-KR")}행 업로드가 완료되었습니다.`);
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : "업로드 저장 중 오류가 발생했습니다."]);
+    } finally {
+      setLoading(false);
+      setProgressText("");
+    }
+  }
+
+  function onSelectFile(nextFile: File | null) {
+    setFile(nextFile);
+    parsedRef.current = null;
+    setPreview([]);
+    setRowCount(0);
+    setErrors([]);
+    setMessage("");
+    setDetectedFormat("");
+    setProgressText("");
   }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">CSV/XLSX 업로드</h1>
-        <p className="mt-1 text-sm text-slate-500">원본 파일의 컬럼을 검증한 뒤 공통 리포트 형식으로 저장합니다.</p>
+        <p className="mt-1 text-sm text-slate-500">원본 파일을 브라우저에서 먼저 검증한 뒤, 분할 업로드 방식으로 안전하게 저장합니다.</p>
       </div>
 
       <section className="panel grid gap-4 p-6 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">
@@ -75,12 +183,12 @@ export default function UploadPage() {
         </label>
         <label>
           <span className="label">업로드 파일</span>
-          <input className="input mt-1" type="file" accept=".csv,.xlsx,.xls" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+          <input className="input mt-1" type="file" accept=".csv,.xlsx,.xls" onChange={(event) => onSelectFile(event.target.files?.[0] ?? null)} />
         </label>
-        <button className="btn-secondary" disabled={loading || !file} onClick={() => upload(true)}>
+        <button className="btn-secondary" disabled={loading || !file} onClick={previewFile}>
           미리보기
         </button>
-        <button className="btn-primary" disabled={loading || !file || preview.length === 0} onClick={() => upload(false)}>
+        <button className="btn-primary" disabled={loading || !file} onClick={uploadConfirmed}>
           업로드 확정
         </button>
       </section>
@@ -88,15 +196,14 @@ export default function UploadPage() {
       <section className="panel p-5">
         <h2 className="font-bold">필수 컬럼</h2>
         <p className="mt-2 text-sm text-slate-600">
-          `date, platform, campaign_name, ad_group_name, ad_name, impressions, clicks, cost, conversions, revenue`
+          <code>date, platform, campaign_name, ad_group_name, ad_name, impressions, clicks, cost, conversions, revenue</code>
         </p>
-        <p className="mt-2 text-sm text-slate-500">
-          일부 변형 헤더도 자동 인식합니다. 예: `campaign`, `campaignName`, `캠페인명`, `광고비`, `매출`, `노출수`
-        </p>
+        <p className="mt-2 text-sm text-slate-500">일부 변형 헤더도 자동 인식합니다. 예: campaign, campaignName, 캠페인명, 광고비, 매출, 노출수</p>
       </section>
 
       {message ? <p className="rounded-md bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">{message}</p> : null}
-      {detectedFormat ? <p className="rounded-md bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">감지된 업로드 포맷: {detectedFormat.toUpperCase()}</p> : null}
+      {progressText ? <p className="rounded-md bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">{progressText}</p> : null}
+      {detectedFormat ? <p className="rounded-md bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">감지된 업로드 형식: {detectedFormat.toUpperCase()}</p> : null}
 
       {errors.length > 0 ? (
         <div className="rounded-md bg-red-50 p-4 text-sm font-semibold text-red-700">
