@@ -33,6 +33,14 @@ type ReportUpdateInput = {
   memo?: string | null;
 };
 
+type ScopedReportParams = {
+  clientId: string;
+  startDate?: string;
+  endDate?: string;
+  platform?: string;
+  campaignName?: string;
+};
+
 let prismaAvailablePromise: Promise<boolean> | null = null;
 const REPORT_UPSERT_BATCH_SIZE = 500;
 
@@ -95,6 +103,22 @@ function mergeDuplicateReportRows(rows: ReportRow[]) {
   }
 
   return [...merged.values()];
+}
+
+function buildScopedReportWhere(params: ScopedReportParams): Prisma.CampaignReportWhereInput {
+  return {
+    clientId: params.clientId,
+    ...(params.startDate && params.endDate
+      ? {
+          date: {
+            gte: new Date(`${params.startDate}T00:00:00.000Z`),
+            lte: new Date(`${params.endDate}T23:59:59.999Z`)
+          }
+        }
+      : {}),
+    ...(params.platform && params.platform !== "ALL" ? { platform: params.platform } : {}),
+    ...(params.campaignName && params.campaignName !== "ALL" ? { campaignName: params.campaignName } : {})
+  };
 }
 
 export async function getStorageMode() {
@@ -315,28 +339,10 @@ export async function listDistinctClientOptions(clientId: string) {
   });
 }
 
-export async function listScopedReports(params: {
-  clientId: string;
-  startDate?: string;
-  endDate?: string;
-  platform?: string;
-  campaignName?: string;
-}) {
+export async function listScopedReports(params: ScopedReportParams) {
   if (await canUsePrisma()) {
     return prisma.campaignReport.findMany({
-      where: {
-        clientId: params.clientId,
-        ...(params.startDate && params.endDate
-          ? {
-              date: {
-                gte: new Date(`${params.startDate}T00:00:00.000Z`),
-                lte: new Date(`${params.endDate}T23:59:59.999Z`)
-              }
-            }
-          : {}),
-        ...(params.platform && params.platform !== "ALL" ? { platform: params.platform } : {}),
-        ...(params.campaignName && params.campaignName !== "ALL" ? { campaignName: params.campaignName } : {})
-      },
+      where: buildScopedReportWhere(params),
       orderBy: [{ date: "asc" }, { platform: "asc" }, { campaignName: "asc" }]
     });
   }
@@ -351,6 +357,52 @@ export async function listScopedReports(params: {
     if (params.campaignName && params.campaignName !== "ALL" && report.campaignName !== params.campaignName) return false;
     return true;
   });
+}
+
+export async function aggregateScopedReportMetrics(params: ScopedReportParams) {
+  if (await canUsePrisma()) {
+    const aggregated = await prisma.campaignReport.aggregate({
+      where: buildScopedReportWhere(params),
+      _sum: {
+        cost: true,
+        impressions: true,
+        clicks: true,
+        conversions: true,
+        revenue: true
+      }
+    });
+
+    return {
+      cost: aggregated._sum.cost ?? 0,
+      impressions: aggregated._sum.impressions ?? 0,
+      clicks: aggregated._sum.clicks ?? 0,
+      conversions: aggregated._sum.conversions ?? 0,
+      revenue: aggregated._sum.revenue ?? 0
+    };
+  }
+
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const reports = await listScopedReports(params);
+  return reports.reduce(
+    (acc, report) => {
+      acc.cost += Number(report.cost) || 0;
+      acc.impressions += Number(report.impressions) || 0;
+      acc.clicks += Number(report.clicks) || 0;
+      acc.conversions += Number(report.conversions) || 0;
+      acc.revenue += Number(report.revenue) || 0;
+      return acc;
+    },
+    {
+      cost: 0,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      revenue: 0
+    }
+  );
 }
 
 export async function listRecentUploads(take = 6) {

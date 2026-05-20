@@ -1,7 +1,7 @@
 import { format, subDays } from "date-fns";
-import { getClientBySlug, getReportDateRange, listDistinctClientOptions, listScopedReports } from "@/lib/data-service";
+import { aggregateScopedReportMetrics, getClientBySlug, getReportDateRange, listDistinctClientOptions, listScopedReports } from "@/lib/data-service";
 import { generateReportSummary } from "@/services/ai/report-summary";
-import { calculateMetrics, compareMetrics, getPreviousRange, groupByDate } from "@/utils/metrics";
+import { calculateMetrics, calculateMetricsFromTotals, compareMetrics, getPreviousRange, groupByDate } from "@/utils/metrics";
 import type { DashboardAnalyticsPayload, DashboardFilters, DashboardPayload, DashboardShellPayload, ReportRow } from "@/types/dashboard";
 
 function toReportRow(row: {
@@ -49,7 +49,9 @@ async function getResolvedDashboardData(clientSlug: string, filters: DashboardFi
     endDate: resolvedEndDate
   };
 
-  const [currentRowsRaw, filterOptions] = await Promise.all([
+  const previousRange = getPreviousRange(scopedFilters.startDate, scopedFilters.endDate);
+
+  const [currentRowsRaw, filterOptions, currentTotals, previousTotals] = await Promise.all([
     listScopedReports({
       clientId: client.id,
       startDate: scopedFilters.startDate,
@@ -57,25 +59,34 @@ async function getResolvedDashboardData(clientSlug: string, filters: DashboardFi
       platform: scopedFilters.platform,
       campaignName: scopedFilters.campaign
     }),
-    listDistinctClientOptions(client.id)
-  ]);
-
-  const currentRows = currentRowsRaw.map(toReportRow);
-  const previousRange = getPreviousRange(scopedFilters.startDate, scopedFilters.endDate);
-  const previousRowsRaw =
+    listDistinctClientOptions(client.id),
+    aggregateScopedReportMetrics({
+      clientId: client.id,
+      startDate: scopedFilters.startDate,
+      endDate: scopedFilters.endDate,
+      platform: scopedFilters.platform,
+      campaignName: scopedFilters.campaign
+    }),
     previousRange.previousStartDate && previousRange.previousEndDate
-      ? await listScopedReports({
+      ? aggregateScopedReportMetrics({
           clientId: client.id,
           startDate: previousRange.previousStartDate,
           endDate: previousRange.previousEndDate,
           platform: scopedFilters.platform,
           campaignName: scopedFilters.campaign
         })
-      : [];
-  const previousRows = previousRowsRaw.map(toReportRow);
+      : Promise.resolve({
+          cost: 0,
+          impressions: 0,
+          clicks: 0,
+          conversions: 0,
+          revenue: 0
+        })
+  ]);
 
-  const currentMetrics = calculateMetrics(currentRows);
-  const previousMetrics = calculateMetrics(previousRows);
+  const currentRows = currentRowsRaw.map(toReportRow);
+  const currentMetrics = calculateMetricsFromTotals(currentTotals);
+  const previousMetrics = calculateMetricsFromTotals(previousTotals);
   const summary = compareMetrics(currentMetrics, previousMetrics);
   const platforms = Array.from(new Set(filterOptions.map((row) => row.platform))).sort();
   const campaigns = Array.from(new Set(filterOptions.map((row) => row.campaignName))).sort();
@@ -129,7 +140,6 @@ async function getResolvedDashboardData(clientSlug: string, filters: DashboardFi
   return {
     client,
     currentRows,
-    previousRows,
     basePayload,
     analytics: {
       timeSeries,

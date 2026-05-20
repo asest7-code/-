@@ -52,6 +52,36 @@ export function calculateMetrics(rows: Pick<ReportRow, "cost" | "impressions" | 
   };
 }
 
+export function calculateMetricsFromTotals(totals: {
+  cost?: number | null;
+  impressions?: number | null;
+  clicks?: number | null;
+  conversions?: number | null;
+  revenue?: number | null;
+}): MetricSummary {
+  const sums = {
+    cost: Number(totals.cost) || 0,
+    impressions: Number(totals.impressions) || 0,
+    clicks: Number(totals.clicks) || 0,
+    conversions: Number(totals.conversions) || 0,
+    revenue: Number(totals.revenue) || 0
+  };
+
+  return {
+    cost: round(sums.cost),
+    impressions: Math.round(sums.impressions),
+    clicks: Math.round(sums.clicks),
+    conversions: round(sums.conversions),
+    revenue: round(sums.revenue),
+    ctr: round(safeDivide(sums.clicks, sums.impressions) * 100),
+    cpc: round(safeDivide(sums.cost, sums.clicks)),
+    cpm: round(safeDivide(sums.cost, sums.impressions) * 1000),
+    cpa: round(safeDivide(sums.cost, sums.conversions)),
+    cvr: round(safeDivide(sums.conversions, sums.clicks) * 100),
+    roas: round(safeDivide(sums.revenue, sums.cost) * 100)
+  };
+}
+
 export function enrichRows<T extends ReportRow>(rows: T[]) {
   return rows.map((row) => ({ ...row, ...calculateMetrics([row]) }));
 }
