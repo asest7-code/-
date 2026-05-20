@@ -18,15 +18,16 @@ type UploadHistoryRow = {
   };
 };
 
-const previewColumns = ["date", "platform", "campaignName", "adGroupName", "adName", "impressions", "clicks", "cost", "conversions", "revenue"];
-const CLIENT_UPLOAD_CHUNK_SIZE = 200;
-
 type ParsedUploadState = {
   rows: ReportRow[];
   preview: ReportRow[];
   detectedFormat: string;
   errors: string[];
 };
+
+const previewColumns = ["date", "platform", "campaignName", "adGroupName", "adName", "impressions", "clicks", "cost", "conversions", "revenue"];
+const CLIENT_UPLOAD_CHUNK_SIZE = 200;
+const MAX_PARALLEL_UPLOADS = 3;
 
 async function parseResponsePayload(response: Response) {
   const text = await response.text();
@@ -38,6 +39,42 @@ async function parseResponsePayload(response: Response) {
   } catch {
     return { error: text };
   }
+}
+
+async function uploadChunk(params: {
+  clientId: string;
+  fileName: string;
+  rows: ReportRow[];
+  uploadId?: string;
+  rowCount: number;
+  detectedFormat: string;
+  isFirstChunk: boolean;
+}) {
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      clientId: params.clientId,
+      fileName: params.fileName,
+      rows: params.rows,
+      uploadId: params.uploadId,
+      rowCount: params.rowCount,
+      detectedFormat: params.detectedFormat,
+      isFirstChunk: params.isFirstChunk
+    })
+  });
+
+  const data = await parseResponsePayload(response);
+
+  if (!response.ok) {
+    throw new Error(typeof data.error === "string" ? data.error : `업로드 저장 중 오류가 발생했습니다. (HTTP ${response.status})`);
+  }
+
+  return {
+    uploadId: typeof data.uploadId === "string" ? data.uploadId : params.uploadId
+  };
 }
 
 export default function UploadPage() {
@@ -142,39 +179,72 @@ export default function UploadPage() {
         return;
       }
 
-      let uploadId: string | undefined;
-
+      const chunks: ReportRow[][] = [];
       for (let index = 0; index < parsed.rows.length; index += CLIENT_UPLOAD_CHUNK_SIZE) {
-        const chunk = parsed.rows.slice(index, index + CLIENT_UPLOAD_CHUNK_SIZE);
-        const chunkNumber = Math.floor(index / CLIENT_UPLOAD_CHUNK_SIZE) + 1;
-        const totalChunks = Math.ceil(parsed.rows.length / CLIENT_UPLOAD_CHUNK_SIZE);
+        chunks.push(parsed.rows.slice(index, index + CLIENT_UPLOAD_CHUNK_SIZE));
+      }
 
-        setProgressText(`업로드 중... ${chunkNumber}/${totalChunks}`);
+      const totalChunks = chunks.length;
+      let completedChunks = 0;
 
-        const response = await fetch("/api/upload", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
+      setProgressText(`업로드 중... 0/${totalChunks}`);
+
+      const firstResult = await uploadChunk({
+        clientId,
+        fileName: file.name,
+        rows: chunks[0],
+        rowCount: parsed.rows.length,
+        detectedFormat: parsed.detectedFormat,
+        isFirstChunk: true
+      });
+
+      const uploadId = firstResult.uploadId;
+      completedChunks += 1;
+      setProgressText(`업로드 중... ${completedChunks}/${totalChunks}`);
+
+      const remainingChunks = chunks.slice(1);
+      let nextChunkIndex = 0;
+
+      const workers = Array.from({ length: Math.min(MAX_PARALLEL_UPLOADS, remainingChunks.length) }, async () => {
+        while (true) {
+          const currentIndex = nextChunkIndex;
+          nextChunkIndex += 1;
+
+          if (currentIndex >= remainingChunks.length) break;
+
+          await uploadChunk({
             clientId,
             fileName: file.name,
-            rows: chunk,
+            rows: remainingChunks[currentIndex],
             uploadId,
             rowCount: parsed.rows.length,
             detectedFormat: parsed.detectedFormat,
-            isFirstChunk: index === 0,
-            isLastChunk: index + CLIENT_UPLOAD_CHUNK_SIZE >= parsed.rows.length
-          })
-        });
+            isFirstChunk: false
+          });
 
-        const data = await parseResponsePayload(response);
-
-        if (!response.ok) {
-          throw new Error(typeof data.error === "string" ? data.error : `업로드 저장 중 오류가 발생했습니다. (HTTP ${response.status})`);
+          completedChunks += 1;
+          setProgressText(`업로드 중... ${completedChunks}/${totalChunks}`);
         }
+      });
 
-        uploadId = typeof data.uploadId === "string" ? data.uploadId : uploadId;
+      await Promise.all(workers);
+
+      const finalizeResponse = await fetch("/api/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          uploadId,
+          finalizeOnly: true,
+          rows: []
+        })
+      });
+
+      const finalizeData = await parseResponsePayload(finalizeResponse);
+
+      if (!finalizeResponse.ok) {
+        throw new Error(typeof finalizeData.error === "string" ? finalizeData.error : `업로드 완료 처리 중 오류가 발생했습니다. (HTTP ${finalizeResponse.status})`);
       }
 
       setMessage(`${parsed.rows.length.toLocaleString("ko-KR")}행 업로드가 완료되었습니다.`);

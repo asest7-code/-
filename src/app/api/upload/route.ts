@@ -13,6 +13,7 @@ type ChunkUploadBody = {
   detectedFormat?: string;
   isFirstChunk?: boolean;
   isLastChunk?: boolean;
+  finalizeOnly?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -25,6 +26,19 @@ export async function POST(request: Request) {
     if (contentType.includes("application/json")) {
       const body = (await request.json()) as ChunkUploadBody;
 
+      if (body.finalizeOnly) {
+        if (!body.uploadId) {
+          return NextResponse.json({ error: "Missing uploadId for finalize request." }, { status: 400 });
+        }
+
+        await updateUploadHistoryStatus(body.uploadId, "SUCCESS");
+
+        return NextResponse.json({
+          uploadId: body.uploadId,
+          finalized: true
+        });
+      }
+
       if (!body.clientId || !Array.isArray(body.rows) || body.rows.length === 0 || !body.fileName) {
         return NextResponse.json({ error: "Invalid chunk upload payload." }, { status: 400 });
       }
@@ -36,17 +50,13 @@ export async function POST(request: Request) {
           clientId: body.clientId,
           fileName: body.fileName,
           rowCount: body.rowCount,
-          status: body.isLastChunk ? "SUCCESS" : "PROCESSING",
+          status: "PROCESSING",
           uploadedBy: session.user.id
         });
         uploadId = upload.id;
       }
 
       await upsertReports(body.clientId, body.rows, uploadId);
-
-      if (body.isLastChunk) {
-        await updateUploadHistoryStatus(uploadId, "SUCCESS");
-      }
 
       return NextResponse.json({
         uploadId,
