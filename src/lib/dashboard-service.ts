@@ -1,7 +1,7 @@
 import { format, subDays } from "date-fns";
 import { getClientBySlug, getReportDateRange, listDistinctClientOptions, listScopedReports } from "@/lib/data-service";
 import { generateReportSummary } from "@/services/ai/report-summary";
-import { calculateMetrics, compareMetrics, enrichRows, getPreviousRange, groupByDate } from "@/utils/metrics";
+import { calculateMetrics, compareMetrics, getPreviousRange, groupByDate } from "@/utils/metrics";
 import type { DashboardFilters, DashboardPayload, ReportRow } from "@/types/dashboard";
 
 function toReportRow(row: {
@@ -121,8 +121,7 @@ export async function getDashboardPayload(clientSlug: string, filters: Dashboard
     timeSeries,
     platformBreakdown,
     campaignRankings,
-    rows: enrichRows(currentRows),
-    sourceRows: currentRows
+    rows: currentRows
   };
 
   return {

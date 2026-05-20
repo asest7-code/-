@@ -65,7 +65,6 @@ export type DashboardPayload = {
   timeSeries: Array<{ date: string; cost: number; clicks: number; conversions: number; revenue: number; roas: number }>;
   platformBreakdown: Array<{ platform: string; cost: number; conversions: number; revenue: number; roas: number }>;
   campaignRankings: Array<{ campaignName: string; cost: number; conversions: number; revenue: number; roas: number; cpa: number }>;
-  rows: Array<ReportRow & MetricSummary>;
-  sourceRows: ReportRow[];
+  rows: ReportRow[];
   reportText: string;
 };

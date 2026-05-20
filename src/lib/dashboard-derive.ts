@@ -1,6 +1,6 @@
 import type { DashboardFilters, DashboardPayload, ReportRow } from "@/types/dashboard";
 import { generateReportSummary } from "@/services/ai/report-summary";
-import { calculateMetrics, compareMetrics, enrichRows, filterRows, getDefaultRange, getPreviousRange, groupByDate } from "@/utils/metrics";
+import { calculateMetrics, compareMetrics, filterRows, getDefaultRange, getPreviousRange, groupByDate } from "@/utils/metrics";
 
 type DashboardClient = DashboardPayload["client"];
 
@@ -66,8 +66,7 @@ export function deriveDashboardPayload(input: {
     timeSeries,
     platformBreakdown,
     campaignRankings,
-    rows: enrichRows(currentRows),
-    sourceRows: input.rows
+    rows: currentRows
   };
 
   return {
