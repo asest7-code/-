@@ -20,6 +20,13 @@ function normalizeDateValue(value: unknown) {
   if (dotted) {
     return `${dotted[1]}-${dotted[2]}-${dotted[3]}`;
   }
+  const slashed = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashed) {
+    const month = slashed[1].padStart(2, "0");
+    const day = slashed[2].padStart(2, "0");
+    const year = slashed[3].length === 2 ? `20${slashed[3]}` : slashed[3];
+    return `${year}-${month}-${day}`;
+  }
   return raw;
 }
 
