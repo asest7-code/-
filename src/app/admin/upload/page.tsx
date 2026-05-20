@@ -8,7 +8,7 @@ type Client = { id: string; name: string; slug: string };
 type PreviewRow = Record<string, string | number | null>;
 
 const previewColumns = ["date", "platform", "campaignName", "adGroupName", "adName", "impressions", "clicks", "cost", "conversions", "revenue"];
-const CLIENT_UPLOAD_CHUNK_SIZE = 500;
+const CLIENT_UPLOAD_CHUNK_SIZE = 200;
 
 type ParsedUploadState = {
   rows: ReportRow[];
@@ -16,6 +16,18 @@ type ParsedUploadState = {
   detectedFormat: string;
   errors: string[];
 };
+
+async function parseResponsePayload(response: Response) {
+  const text = await response.text();
+
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { error: text };
+  }
+}
 
 export default function UploadPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -134,13 +146,13 @@ export default function UploadPage() {
           })
         });
 
-        const data = await response.json();
+        const data = await parseResponsePayload(response);
 
         if (!response.ok) {
-          throw new Error(data.error ?? "업로드 저장 중 오류가 발생했습니다.");
+          throw new Error(typeof data.error === "string" ? data.error : `업로드 저장 중 오류가 발생했습니다. (HTTP ${response.status})`);
         }
 
-        uploadId = data.uploadId ?? uploadId;
+        uploadId = typeof data.uploadId === "string" ? data.uploadId : uploadId;
       }
 
       setMessage(`${parsed.rows.length.toLocaleString("ko-KR")}행 업로드가 완료되었습니다.`);

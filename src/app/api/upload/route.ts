@@ -16,83 +16,93 @@ type ChunkUploadBody = {
 };
 
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await requireAdmin();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const contentType = request.headers.get("content-type") ?? "";
+    const contentType = request.headers.get("content-type") ?? "";
 
-  if (contentType.includes("application/json")) {
-    const body = (await request.json()) as ChunkUploadBody;
+    if (contentType.includes("application/json")) {
+      const body = (await request.json()) as ChunkUploadBody;
 
-    if (!body.clientId || !Array.isArray(body.rows) || body.rows.length === 0 || !body.fileName) {
-      return NextResponse.json({ error: "Invalid chunk upload payload." }, { status: 400 });
-    }
+      if (!body.clientId || !Array.isArray(body.rows) || body.rows.length === 0 || !body.fileName) {
+        return NextResponse.json({ error: "Invalid chunk upload payload." }, { status: 400 });
+      }
 
-    let uploadId = body.uploadId;
+      let uploadId = body.uploadId;
 
-    if (!uploadId) {
-      const upload = await createUploadHistory({
-        clientId: body.clientId,
-        fileName: body.fileName,
-        rowCount: body.rowCount,
-        status: body.isLastChunk ? "SUCCESS" : "PROCESSING",
-        uploadedBy: session.user.id
+      if (!uploadId) {
+        const upload = await createUploadHistory({
+          clientId: body.clientId,
+          fileName: body.fileName,
+          rowCount: body.rowCount,
+          status: body.isLastChunk ? "SUCCESS" : "PROCESSING",
+          uploadedBy: session.user.id
+        });
+        uploadId = upload.id;
+      }
+
+      await upsertReports(body.clientId, body.rows, uploadId);
+
+      if (body.isLastChunk) {
+        await updateUploadHistoryStatus(uploadId, "SUCCESS");
+      }
+
+      return NextResponse.json({
+        uploadId,
+        rowCount: body.rows.length,
+        detectedFormat: body.detectedFormat ?? ""
       });
-      uploadId = upload.id;
     }
 
-    await upsertReports(body.clientId, body.rows, uploadId);
+    const formData = await request.formData();
+    const clientId = String(formData.get("clientId") ?? "");
+    const file = formData.get("file");
+    const previewOnly = String(formData.get("previewOnly") ?? "false") === "true";
 
-    if (body.isLastChunk) {
-      await updateUploadHistoryStatus(uploadId, "SUCCESS");
+    if (!clientId || !(file instanceof File)) {
+      return NextResponse.json({ error: "Select a client and an upload file." }, { status: 400 });
     }
 
-    return NextResponse.json({
-      uploadId,
-      rowCount: body.rows.length,
-      detectedFormat: body.detectedFormat ?? ""
+    const parsed = await parseUploadFile(file);
+
+    if (parsed.rows.length > 100000) {
+      return NextResponse.json(
+        {
+          error: "You can upload up to 100,000 rows at a time.",
+          preview: parsed.preview,
+          detectedFormat: parsed.detectedFormat
+        },
+        { status: 400 }
+      );
+    }
+
+    if (parsed.errors.length > 0) {
+      return NextResponse.json({ errors: parsed.errors, preview: parsed.preview, detectedFormat: parsed.detectedFormat }, { status: 400 });
+    }
+
+    if (previewOnly) {
+      return NextResponse.json({ preview: parsed.preview, rowCount: parsed.rows.length, detectedFormat: parsed.detectedFormat });
+    }
+
+    const upload = await createUploadHistory({
+      clientId,
+      fileName: file.name,
+      rowCount: parsed.rows.length,
+      status: "SUCCESS",
+      uploadedBy: session.user.id
     });
-  }
 
-  const formData = await request.formData();
-  const clientId = String(formData.get("clientId") ?? "");
-  const file = formData.get("file");
-  const previewOnly = String(formData.get("previewOnly") ?? "false") === "true";
+    await upsertReports(clientId, parsed.rows, upload.id);
 
-  if (!clientId || !(file instanceof File)) {
-    return NextResponse.json({ error: "Select a client and an upload file." }, { status: 400 });
-  }
-
-  const parsed = await parseUploadFile(file);
-
-  if (parsed.rows.length > 100000) {
+    return NextResponse.json({ upload, rowCount: parsed.rows.length, detectedFormat: parsed.detectedFormat });
+  } catch (error) {
+    console.error("[upload] Upload request failed", error);
     return NextResponse.json(
       {
-        error: "You can upload up to 100,000 rows at a time.",
-        preview: parsed.preview,
-        detectedFormat: parsed.detectedFormat
+        error: error instanceof Error ? error.message : "Upload request failed."
       },
-      { status: 400 }
+      { status: 500 }
     );
   }
-
-  if (parsed.errors.length > 0) {
-    return NextResponse.json({ errors: parsed.errors, preview: parsed.preview, detectedFormat: parsed.detectedFormat }, { status: 400 });
-  }
-
-  if (previewOnly) {
-    return NextResponse.json({ preview: parsed.preview, rowCount: parsed.rows.length, detectedFormat: parsed.detectedFormat });
-  }
-
-  const upload = await createUploadHistory({
-    clientId,
-    fileName: file.name,
-    rowCount: parsed.rows.length,
-    status: "SUCCESS",
-    uploadedBy: session.user.id
-  });
-
-  await upsertReports(clientId, parsed.rows, upload.id);
-
-  return NextResponse.json({ upload, rowCount: parsed.rows.length, detectedFormat: parsed.detectedFormat });
 }
