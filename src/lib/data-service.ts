@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { makeLocalId, readLocalDb, writeLocalDb } from "@/lib/local-store";
@@ -490,7 +491,9 @@ export async function upsertReports(clientId: string, rows: ReportRow[], uploadI
       const chunk = mergedRows.slice(index, index + REPORT_UPSERT_BATCH_SIZE);
       const values = chunk.map((row) => {
         const reportDate = new Date(`${row.date}T00:00:00.000Z`);
+        const now = new Date();
         return Prisma.sql`(
+          ${randomUUID()},
           ${clientId},
           ${reportDate},
           ${row.platform},
@@ -509,13 +512,16 @@ export async function upsertReports(clientId: string, rows: ReportRow[], uploadI
           ${row.purchases ?? null},
           ${row.leads ?? null},
           ${row.memo ?? null},
-          ${uploadId}
+          ${uploadId},
+          ${now},
+          ${now}
         )`;
       });
 
       await prisma.$executeRaw(
         Prisma.sql`
           INSERT INTO "CampaignReport" (
+            "id",
             "clientId",
             "date",
             "platform",
@@ -534,7 +540,9 @@ export async function upsertReports(clientId: string, rows: ReportRow[], uploadI
             "purchases",
             "leads",
             "memo",
-            "uploadId"
+            "uploadId",
+            "createdAt",
+            "updatedAt"
           )
           VALUES ${Prisma.join(values)}
           ON CONFLICT ("clientId", "date", "platform", "campaignName", "adGroupName", "adName")
