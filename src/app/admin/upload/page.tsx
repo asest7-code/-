@@ -6,6 +6,17 @@ import type { ReportRow } from "@/types/dashboard";
 
 type Client = { id: string; name: string; slug: string };
 type PreviewRow = Record<string, string | number | null>;
+type UploadHistoryRow = {
+  id: string;
+  fileName: string;
+  rowCount: number;
+  status: string;
+  createdAt: string;
+  client: {
+    id: string;
+    name: string;
+  };
+};
 
 const previewColumns = ["date", "platform", "campaignName", "adGroupName", "adName", "impressions", "clicks", "cost", "conversions", "revenue"];
 const CLIENT_UPLOAD_CHUNK_SIZE = 200;
@@ -40,6 +51,7 @@ export default function UploadPage() {
   const [detectedFormat, setDetectedFormat] = useState("");
   const [loading, setLoading] = useState(false);
   const [progressText, setProgressText] = useState("");
+  const [uploads, setUploads] = useState<UploadHistoryRow[]>([]);
   const parsedRef = useRef<ParsedUploadState | null>(null);
 
   useEffect(() => {
@@ -50,6 +62,16 @@ export default function UploadPage() {
         setClientId(data.clients?.[0]?.id ?? "");
       });
   }, []);
+
+  useEffect(() => {
+    void loadUploads();
+  }, []);
+
+  async function loadUploads() {
+    const response = await fetch("/api/uploads?take=30");
+    const data = await response.json();
+    setUploads(data.uploads ?? []);
+  }
 
   async function ensureParsedUpload() {
     if (!file) return null;
@@ -156,6 +178,7 @@ export default function UploadPage() {
       }
 
       setMessage(`${parsed.rows.length.toLocaleString("ko-KR")}행 업로드가 완료되었습니다.`);
+      await loadUploads();
     } catch (error) {
       setErrors([error instanceof Error ? error.message : "업로드 저장 중 오류가 발생했습니다."]);
     } finally {
@@ -173,6 +196,33 @@ export default function UploadPage() {
     setMessage("");
     setDetectedFormat("");
     setProgressText("");
+  }
+
+  async function removeUpload(upload: UploadHistoryRow) {
+    const confirmed = window.confirm(`${upload.fileName} 업로드 이력과 연결된 데이터를 삭제할까요?`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    setErrors([]);
+    setMessage("");
+
+    try {
+      const response = await fetch(`/api/uploads/${upload.id}`, {
+        method: "DELETE"
+      });
+      const data = await parseResponsePayload(response);
+
+      if (!response.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "업로드 이력을 삭제하지 못했습니다.");
+      }
+
+      setMessage("업로드 이력과 연결된 데이터를 삭제했습니다.");
+      await loadUploads();
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : "업로드 이력을 삭제하지 못했습니다."]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -252,6 +302,50 @@ export default function UploadPage() {
                   ))}
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel overflow-hidden">
+        <div className="border-b p-4">
+          <h2 className="font-bold">업로드 이력</h2>
+          <p className="mt-1 text-sm text-slate-500">최근 업로드한 파일을 확인하고, 필요하면 해당 업로드로 들어간 데이터를 삭제할 수 있습니다.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-sm">
+            <thead className="border-b bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-3 py-3">클라이언트</th>
+                <th className="px-3 py-3">파일명</th>
+                <th className="px-3 py-3">행 수</th>
+                <th className="px-3 py-3">상태</th>
+                <th className="px-3 py-3">업로드 시각</th>
+                <th className="px-3 py-3 text-right">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uploads.map((upload) => (
+                <tr key={upload.id} className="border-b last:border-0">
+                  <td className="px-3 py-3 font-semibold">{upload.client.name}</td>
+                  <td className="px-3 py-3">{upload.fileName}</td>
+                  <td className="px-3 py-3">{upload.rowCount.toLocaleString("ko-KR")}</td>
+                  <td className="px-3 py-3">{upload.status}</td>
+                  <td className="px-3 py-3">{new Date(upload.createdAt).toLocaleString("ko-KR")}</td>
+                  <td className="px-3 py-3 text-right">
+                    <button className="btn-secondary" disabled={loading} onClick={() => removeUpload(upload)}>
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {uploads.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-6 text-center text-slate-500" colSpan={6}>
+                    업로드 이력이 아직 없습니다.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

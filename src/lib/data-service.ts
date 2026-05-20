@@ -370,6 +370,32 @@ export async function listRecentUploads(take = 6) {
     }));
 }
 
+export async function listUploadHistories(params?: { clientId?: string; take?: number }) {
+  const take = params?.take ?? 30;
+
+  if (await canUsePrisma()) {
+    return prisma.uploadHistory.findMany({
+      where: params?.clientId && params.clientId !== "ALL" ? { clientId: params.clientId } : undefined,
+      orderBy: { createdAt: "desc" },
+      take,
+      include: { client: true }
+    });
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const db = await readLocalDb();
+  return db.uploads
+    .filter((upload) => !params?.clientId || params.clientId === "ALL" || upload.clientId === params.clientId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, take)
+    .map((upload) => ({
+      ...upload,
+      client: db.clients.find((client) => client.id === upload.clientId)!
+    }));
+}
+
 export async function listAllReports() {
   if (await canUsePrisma()) return prisma.campaignReport.findMany();
   if (isVercelRuntime()) {
@@ -421,6 +447,28 @@ export async function updateUploadHistoryStatus(id: string, status: string) {
   };
   await writeLocalDb(db);
   return db.uploads[index];
+}
+
+export async function deleteUploadHistory(id: string) {
+  if (await canUsePrisma()) {
+    await prisma.$transaction([
+      prisma.campaignReport.deleteMany({
+        where: { uploadId: id }
+      }),
+      prisma.uploadHistory.delete({
+        where: { id }
+      })
+    ]);
+    return;
+  }
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const db = await readLocalDb();
+  db.reports = db.reports.filter((report) => report.uploadId !== id);
+  db.uploads = db.uploads.filter((upload) => upload.id !== id);
+  await writeLocalDb(db);
 }
 
 function reportMatchesComposite(report: { clientId: string; date: string; platform: string; campaignName: string; adGroupName: string; adName: string }, clientId: string, row: ReportRow) {
