@@ -15,16 +15,31 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import type { DashboardPayload } from "@/types/dashboard";
+import type { DashboardAnalyticsPayload } from "@/types/dashboard";
 
 const colors = ["#1D4ED8", "#0891B2", "#059669", "#F59E0B", "#EF4444", "#7C3AED"];
 
-export function DashboardCharts({ payload }: { payload: DashboardPayload }) {
+export function DashboardCharts({
+  analytics,
+  loading
+}: {
+  analytics: DashboardAnalyticsPayload | null;
+  loading: boolean;
+}) {
+  if (!analytics) {
+    return (
+      <section className="panel p-5">
+        <h2 className="font-bold text-slate-950">차트</h2>
+        <p className="mt-3 text-sm text-slate-500">{loading ? "차트 데이터를 불러오는 중입니다." : "차트 데이터를 불러오지 못했습니다."}</p>
+      </section>
+    );
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <ChartBox title="일자별 광고비 / 매출 추이">
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={payload.timeSeries}>
+          <LineChart data={analytics.timeSeries}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -38,7 +53,7 @@ export function DashboardCharts({ payload }: { payload: DashboardPayload }) {
 
       <ChartBox title="일자별 클릭수 / 전환수">
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={payload.timeSeries}>
+          <LineChart data={analytics.timeSeries}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -52,7 +67,7 @@ export function DashboardCharts({ payload }: { payload: DashboardPayload }) {
 
       <ChartBox title="일자별 ROAS 추이">
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={payload.timeSeries}>
+          <LineChart data={analytics.timeSeries}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -66,8 +81,8 @@ export function DashboardCharts({ payload }: { payload: DashboardPayload }) {
       <ChartBox title="매체별 광고비 비중">
         <ResponsiveContainer width="100%" height={280}>
           <PieChart>
-            <Pie data={payload.platformBreakdown} dataKey="cost" nameKey="platform" outerRadius={95} label>
-              {payload.platformBreakdown.map((_, index) => (
+            <Pie data={analytics.platformBreakdown} dataKey="cost" nameKey="platform" outerRadius={95} label>
+              {analytics.platformBreakdown.map((_, index) => (
                 <Cell key={index} fill={colors[index % colors.length]} />
               ))}
             </Pie>
@@ -79,7 +94,7 @@ export function DashboardCharts({ payload }: { payload: DashboardPayload }) {
 
       <ChartBox title="매체별 ROAS 비교">
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={payload.platformBreakdown}>
+          <BarChart data={analytics.platformBreakdown}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="platform" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -91,7 +106,7 @@ export function DashboardCharts({ payload }: { payload: DashboardPayload }) {
 
       <ChartBox title="캠페인별 ROAS 순위">
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={payload.campaignRankings.slice(0, 8)}>
+          <BarChart data={analytics.campaignRankings.slice(0, 8)}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="campaignName" tick={{ fontSize: 10 }} />
             <YAxis tick={{ fontSize: 11 }} />

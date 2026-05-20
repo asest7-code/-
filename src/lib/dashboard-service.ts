@@ -2,7 +2,7 @@ import { format, subDays } from "date-fns";
 import { getClientBySlug, getReportDateRange, listDistinctClientOptions, listScopedReports } from "@/lib/data-service";
 import { generateReportSummary } from "@/services/ai/report-summary";
 import { calculateMetrics, compareMetrics, getPreviousRange, groupByDate } from "@/utils/metrics";
-import type { DashboardFilters, DashboardPayload, ReportRow } from "@/types/dashboard";
+import type { DashboardAnalyticsPayload, DashboardFilters, DashboardPayload, DashboardShellPayload, ReportRow } from "@/types/dashboard";
 
 function toReportRow(row: {
   id: string;
@@ -27,7 +27,7 @@ function toReportRow(row: {
   return { ...row, date: typeof row.date === "string" ? row.date.slice(0, 10) : format(row.date, "yyyy-MM-dd") };
 }
 
-export async function getDashboardPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardPayload | null> {
+async function getResolvedDashboardData(clientSlug: string, filters: DashboardFilters = {}) {
   const client = await getClientBySlug(clientSlug);
 
   if (!client) return null;
@@ -102,7 +102,7 @@ export async function getDashboardPayload(clientSlug: string, filters: Dashboard
     .map(([campaignName, rows]) => ({ campaignName, ...calculateMetrics(rows) }))
     .sort((a, b) => b.roas - a.roas);
 
-  const partialPayload = {
+  const basePayload = {
     client: {
       id: client.id,
       name: client.name,
@@ -117,15 +117,53 @@ export async function getDashboardPayload(clientSlug: string, filters: Dashboard
       endDate: scopedFilters.endDate
     },
     summary,
-    previous: previousMetrics,
-    timeSeries,
+    previous: previousMetrics
+  };
+
+  const reportSummaryInput = {
+    summary,
     platformBreakdown,
-    campaignRankings,
-    rows: currentRows
+    campaignRankings
   };
 
   return {
-    ...partialPayload,
-    reportText: generateReportSummary(partialPayload)
+    client,
+    currentRows,
+    previousRows,
+    basePayload,
+    analytics: {
+      timeSeries,
+      platformBreakdown,
+      campaignRankings,
+      reportText: generateReportSummary(reportSummaryInput)
+    }
+  };
+}
+
+export async function getDashboardShellPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardShellPayload | null> {
+  const resolved = await getResolvedDashboardData(clientSlug, filters);
+
+  if (!resolved) return null;
+
+  return resolved.basePayload;
+}
+
+export async function getDashboardAnalyticsPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardAnalyticsPayload | null> {
+  const resolved = await getResolvedDashboardData(clientSlug, filters);
+
+  if (!resolved) return null;
+
+  return resolved.analytics;
+}
+
+export async function getDashboardPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardPayload | null> {
+  const resolved = await getResolvedDashboardData(clientSlug, filters);
+
+  if (!resolved) return null;
+
+  return {
+    ...resolved.basePayload,
+    ...resolved.analytics,
+    rows: resolved.currentRows
   };
 }

@@ -68,3 +68,7 @@ export type DashboardPayload = {
   rows: ReportRow[];
   reportText: string;
 };
+
+export type DashboardShellPayload = Pick<DashboardPayload, "client" | "filters" | "summary" | "previous">;
+
+export type DashboardAnalyticsPayload = Pick<DashboardPayload, "timeSeries" | "platformBreakdown" | "campaignRankings" | "reportText">;

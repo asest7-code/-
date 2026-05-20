@@ -12,5 +12,15 @@ export function DemoClient({ payload }: { payload: DashboardPayload }) {
     campaign: "ALL"
   });
 
-  return <DashboardContent clientSlug="demo" payload={payload} filters={filters} setFilters={setFilters} reportMode />;
+  return (
+    <DashboardContent
+      clientSlug="demo"
+      payload={payload}
+      analytics={payload}
+      analyticsLoading={false}
+      filters={filters}
+      setFilters={setFilters}
+      reportMode
+    />
+  );
 }
