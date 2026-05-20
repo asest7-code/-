@@ -42,7 +42,10 @@ async function canUsePrisma() {
         await prisma.$disconnect();
         return true;
       })
-      .catch(() => false);
+      .catch((error) => {
+        console.error("[data-service] Prisma connectivity check failed", error);
+        return false;
+      });
   }
   return prismaAvailablePromise;
 }
@@ -57,7 +60,10 @@ export async function getStorageMode() {
 }
 
 export async function getUserByEmail(email: string) {
-  if (await canUsePrisma()) {
+  const usePrisma = await canUsePrisma();
+  console.info("[data-service] getUserByEmail mode", { email, usePrisma, vercel: Boolean(process.env.VERCEL) });
+
+  if (usePrisma) {
     return prisma.user.findUnique({ where: { email } });
   }
   const db = await readLocalDb();
