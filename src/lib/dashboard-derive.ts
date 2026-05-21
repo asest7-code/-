@@ -1,5 +1,5 @@
-import type { DashboardFilters, DashboardPayload, ReportRow } from "@/types/dashboard";
 import { generateReportSummary } from "@/services/ai/report-summary";
+import type { DashboardFilters, DashboardPayload, ReportRow } from "@/types/dashboard";
 import { calculateMetrics, compareMetrics, filterRows, getDefaultRange, getPreviousRange, groupByDate } from "@/utils/metrics";
 
 type DashboardClient = DashboardPayload["client"];
@@ -19,17 +19,22 @@ export function deriveDashboardPayload(input: {
   const currentRows = filterRows(input.rows, activeFilters);
   const previousRange = getPreviousRange(activeFilters.startDate, activeFilters.endDate);
   const previousRows = filterRows(input.rows, {
+    ...activeFilters,
     startDate: previousRange.previousStartDate,
-    endDate: previousRange.previousEndDate,
-    platform: activeFilters.platform,
-    campaign: activeFilters.campaign
+    endDate: previousRange.previousEndDate
   });
 
   const currentMetrics = calculateMetrics(currentRows);
   const previousMetrics = calculateMetrics(previousRows);
   const summary = compareMetrics(currentMetrics, previousMetrics);
+
   const platforms = Array.from(new Set(input.rows.map((row) => row.platform))).sort();
   const campaigns = Array.from(new Set(input.rows.map((row) => row.campaignName))).sort();
+  const adGroups = Array.from(new Set(input.rows.map((row) => row.adGroupName).filter(Boolean))).sort();
+  const creatives = Array.from(new Set(input.rows.map((row) => row.creativeName || row.adName).filter(Boolean) as string[])).sort();
+  const devices = Array.from(new Set(input.rows.map((row) => row.device).filter(Boolean) as string[])).sort();
+  const keywords = Array.from(new Set(input.rows.map((row) => row.keyword).filter(Boolean) as string[])).sort();
+  const landingPages = Array.from(new Set(input.rows.map((row) => row.landingPage).filter(Boolean) as string[])).sort();
 
   const timeSeries = groupByDate(currentRows).map((item) => ({
     date: item.date,
@@ -58,6 +63,11 @@ export function deriveDashboardPayload(input: {
     filters: {
       platforms,
       campaigns,
+      adGroups,
+      creatives,
+      devices,
+      keywords,
+      landingPages,
       startDate: activeFilters.startDate,
       endDate: activeFilters.endDate
     },

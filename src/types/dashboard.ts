@@ -1,5 +1,8 @@
 export type Platform = "NAVER" | "GOOGLE" | "META" | "KAKAO" | "TIKTOK" | "GA4" | string;
 export type ReportLevel = "campaign" | "ad_group" | "ad" | "keyword";
+export type DashboardAdType = "ALL" | "SA" | "DA";
+export type DashboardCompareMode = "previous" | "month" | "year" | "none";
+export type DashboardSectionId = "summary" | "sa" | "da" | "campaign" | "creative" | "keyword" | "landing" | "compare" | "raw";
 
 export type ReportRow = {
   id?: string;
@@ -47,6 +50,106 @@ export type DashboardFilters = {
   endDate?: string;
   platform?: string;
   campaign?: string;
+  compareMode?: DashboardCompareMode;
+  adType?: DashboardAdType;
+  adGroup?: string;
+  creative?: string;
+  device?: string;
+  keyword?: string;
+  landingPage?: string;
+};
+
+export type DashboardFilterOptions = {
+  platforms: string[];
+  campaigns: string[];
+  adGroups: string[];
+  creatives: string[];
+  devices: string[];
+  keywords: string[];
+  landingPages: string[];
+  startDate?: string;
+  endDate?: string;
+};
+
+export type ExtendedMetricSummary = MetricSummary & {
+  purchases: number;
+  leads: number;
+  aov: number;
+  purchaseRate: number;
+  leadRate: number;
+};
+
+export type ExtendedComparisonSummary = ExtendedMetricSummary & {
+  changes: Record<
+    "cost" | "impressions" | "clicks" | "conversions" | "revenue" | "ctr" | "cpc" | "cpa" | "cvr" | "roas" | "purchases" | "leads",
+    number | null
+  >;
+  deltas: Record<
+    "cost" | "impressions" | "clicks" | "conversions" | "revenue" | "ctr" | "cpc" | "cpa" | "cvr" | "roas" | "purchases" | "leads",
+    number | null
+  >;
+};
+
+export type BreakdownRow = {
+  id: string;
+  label: string;
+  platform?: string | null;
+  adType?: Exclude<DashboardAdType, "ALL"> | null;
+  campaignName?: string | null;
+  adGroupName?: string | null;
+  adName?: string | null;
+  creativeName?: string | null;
+  keyword?: string | null;
+  landingPage?: string | null;
+  device?: string | null;
+  metrics: ExtendedMetricSummary;
+  previous?: ExtendedMetricSummary | null;
+  changes?: ExtendedComparisonSummary["changes"];
+  deltas?: ExtendedComparisonSummary["deltas"];
+};
+
+export type ComparePoint = {
+  date: string;
+  currentCost: number;
+  currentConversions: number;
+  currentRevenue: number;
+  currentRoas: number;
+  previousCost: number;
+  previousConversions: number;
+  previousRevenue: number;
+  previousRoas: number;
+};
+
+export type InsightItem = {
+  id: string;
+  title: string;
+  body: string;
+  tone?: "neutral" | "positive" | "warning" | "danger";
+};
+
+export type DashboardSectionPayload = {
+  section: DashboardSectionId;
+  subSection?: string;
+  summary: ExtendedComparisonSummary;
+  previous: ExtendedMetricSummary;
+  timeSeries: Array<{ date: string; cost: number; clicks: number; conversions: number; revenue: number; roas: number }>;
+  compareSeries?: ComparePoint[];
+  platformRows: BreakdownRow[];
+  campaignRows: BreakdownRow[];
+  adGroupRows: BreakdownRow[];
+  creativeRows: BreakdownRow[];
+  keywordRows: BreakdownRow[];
+  landingRows: BreakdownRow[];
+  dateRows: BreakdownRow[];
+  insights: InsightItem[];
+};
+
+export type DashboardRawPage = {
+  rows: ReportRow[];
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
 };
 
 export type DashboardPayload = {
@@ -57,12 +160,7 @@ export type DashboardPayload = {
     logoUrl?: string | null;
     isPasswordProtected: boolean;
   };
-  filters: {
-    platforms: string[];
-    campaigns: string[];
-    startDate?: string;
-    endDate?: string;
-  };
+  filters: DashboardFilterOptions;
   summary: ComparisonSummary;
   previous: MetricSummary;
   timeSeries: Array<{ date: string; cost: number; clicks: number; conversions: number; revenue: number; roas: number }>;

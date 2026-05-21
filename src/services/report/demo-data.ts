@@ -1,6 +1,7 @@
 import { format, subDays } from "date-fns";
 import type { DashboardFilters, DashboardPayload, ReportRow } from "@/types/dashboard";
 import { deriveDashboardPayload } from "@/lib/dashboard-derive";
+import { getAdTypeForRow } from "@/lib/dashboard/metrics";
 
 const platforms = ["NAVER", "GOOGLE", "META", "KAKAO"];
 const campaigns = ["Brand Search", "Lead Gen", "Retargeting", "Promotion", "Content Traffic", "Purchase Conversion"];
@@ -46,6 +47,33 @@ export function makeDemoRows(): ReportRow[] {
     }
   }
   return rows;
+}
+
+export function filterDemoRows(rows: ReportRow[], filters: DashboardFilters = {}) {
+  return rows.filter((row) => {
+    if (filters.startDate && row.date < filters.startDate) return false;
+    if (filters.endDate && row.date > filters.endDate) return false;
+
+    if (filters.platform && filters.platform !== "ALL") {
+      if (filters.platform === "GFA") {
+        if (!(row.platform === "NAVER" && row.creativeName)) return false;
+      } else if (filters.platform === "DANGGEUN") {
+        if (row.platform !== "DAANGN") return false;
+      } else if (row.platform !== filters.platform) {
+        return false;
+      }
+    }
+
+    if (filters.campaign && filters.campaign !== "ALL" && row.campaignName !== filters.campaign) return false;
+    if (filters.adGroup && filters.adGroup !== "ALL" && row.adGroupName !== filters.adGroup) return false;
+    if (filters.creative && filters.creative !== "ALL" && row.adName !== filters.creative && row.creativeName !== filters.creative) return false;
+    if (filters.device && filters.device !== "ALL" && String(row.device ?? "").toUpperCase() !== String(filters.device).toUpperCase()) return false;
+    if (filters.keyword && filters.keyword !== "ALL" && row.keyword !== filters.keyword) return false;
+    if (filters.landingPage && filters.landingPage !== "ALL" && row.landingPage !== filters.landingPage) return false;
+    if (filters.adType && filters.adType !== "ALL" && getAdTypeForRow(row) !== filters.adType) return false;
+
+    return true;
+  });
 }
 
 export async function getDemoDashboardPayload(filters: DashboardFilters = {}): Promise<DashboardPayload> {

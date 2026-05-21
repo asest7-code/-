@@ -87,7 +87,13 @@ export async function getDashboardShellPayload(clientSlug: string, filters: Dash
       startDate: resolved.scopedFilters.startDate,
       endDate: resolved.scopedFilters.endDate,
       platform: resolved.scopedFilters.platform,
-      campaignName: resolved.scopedFilters.campaign
+      campaignName: resolved.scopedFilters.campaign,
+      adGroupName: resolved.scopedFilters.adGroup,
+      adName: resolved.scopedFilters.creative,
+      device: resolved.scopedFilters.device,
+      keyword: resolved.scopedFilters.keyword,
+      landingPage: resolved.scopedFilters.landingPage,
+      adType: resolved.scopedFilters.adType
     }),
     resolved.previousRange.previousStartDate && resolved.previousRange.previousEndDate
       ? aggregateScopedReportMetrics({
@@ -95,7 +101,13 @@ export async function getDashboardShellPayload(clientSlug: string, filters: Dash
           startDate: resolved.previousRange.previousStartDate,
           endDate: resolved.previousRange.previousEndDate,
           platform: resolved.scopedFilters.platform,
-          campaignName: resolved.scopedFilters.campaign
+          campaignName: resolved.scopedFilters.campaign,
+          adGroupName: resolved.scopedFilters.adGroup,
+          adName: resolved.scopedFilters.creative,
+          device: resolved.scopedFilters.device,
+          keyword: resolved.scopedFilters.keyword,
+          landingPage: resolved.scopedFilters.landingPage,
+          adType: resolved.scopedFilters.adType
         })
       : Promise.resolve({
           cost: 0,
@@ -111,6 +123,18 @@ export async function getDashboardShellPayload(clientSlug: string, filters: Dash
   const summary = compareMetrics(currentMetrics, previousMetrics);
   const platforms = Array.from(new Set(filterOptions.map((row) => row.platform))).sort();
   const campaigns = Array.from(new Set(filterOptions.map((row) => row.campaignName))).sort();
+  const adGroups = Array.from(new Set(filterOptions.map((row) => row.adGroupName).filter(Boolean))).sort();
+  const creatives = Array.from(
+    new Set(
+      filterOptions
+        .map((row) => row.creativeName || row.adName)
+        .filter(Boolean)
+        .map((value) => String(value))
+    )
+  ).sort();
+  const devices = Array.from(new Set(filterOptions.map((row) => row.device).filter(Boolean).map((value) => String(value).toUpperCase()))).sort();
+  const keywords = Array.from(new Set(filterOptions.map((row) => row.keyword).filter(Boolean).map((value) => String(value)))).sort();
+  const landingPages = Array.from(new Set(filterOptions.map((row) => row.landingPage).filter(Boolean).map((value) => String(value)))).sort();
 
   return {
     client: {
@@ -123,6 +147,11 @@ export async function getDashboardShellPayload(clientSlug: string, filters: Dash
     filters: {
       platforms,
       campaigns,
+      adGroups,
+      creatives,
+      devices,
+      keywords,
+      landingPages,
       startDate: resolved.scopedFilters.startDate,
       endDate: resolved.scopedFilters.endDate
     },
@@ -141,21 +170,39 @@ export async function getDashboardAnalyticsPayload(clientSlug: string, filters: 
       startDate: resolved.scopedFilters.startDate,
       endDate: resolved.scopedFilters.endDate,
       platform: resolved.scopedFilters.platform,
-      campaignName: resolved.scopedFilters.campaign
+      campaignName: resolved.scopedFilters.campaign,
+      adGroupName: resolved.scopedFilters.adGroup,
+      adName: resolved.scopedFilters.creative,
+      device: resolved.scopedFilters.device,
+      keyword: resolved.scopedFilters.keyword,
+      landingPage: resolved.scopedFilters.landingPage,
+      adType: resolved.scopedFilters.adType
     }),
     aggregateScopedPlatformBreakdown({
       clientId: resolved.client.id,
       startDate: resolved.scopedFilters.startDate,
       endDate: resolved.scopedFilters.endDate,
       platform: resolved.scopedFilters.platform,
-      campaignName: resolved.scopedFilters.campaign
+      campaignName: resolved.scopedFilters.campaign,
+      adGroupName: resolved.scopedFilters.adGroup,
+      adName: resolved.scopedFilters.creative,
+      device: resolved.scopedFilters.device,
+      keyword: resolved.scopedFilters.keyword,
+      landingPage: resolved.scopedFilters.landingPage,
+      adType: resolved.scopedFilters.adType
     }),
     aggregateScopedCampaignRankings({
       clientId: resolved.client.id,
       startDate: resolved.scopedFilters.startDate,
       endDate: resolved.scopedFilters.endDate,
       platform: resolved.scopedFilters.platform,
-      campaignName: resolved.scopedFilters.campaign
+      campaignName: resolved.scopedFilters.campaign,
+      adGroupName: resolved.scopedFilters.adGroup,
+      adName: resolved.scopedFilters.creative,
+      device: resolved.scopedFilters.device,
+      keyword: resolved.scopedFilters.keyword,
+      landingPage: resolved.scopedFilters.landingPage,
+      adType: resolved.scopedFilters.adType
     }),
     getDashboardShellPayload(clientSlug, filters)
   ]);

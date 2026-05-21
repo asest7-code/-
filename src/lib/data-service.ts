@@ -40,6 +40,12 @@ type ScopedReportParams = {
   endDate?: string;
   platform?: string;
   campaignName?: string;
+  adGroupName?: string;
+  adName?: string;
+  device?: string;
+  keyword?: string;
+  landingPage?: string;
+  adType?: string;
 };
 
 let prismaAvailablePromise: Promise<boolean> | null = null;
@@ -111,6 +117,33 @@ function mergeDuplicateReportRows(rows: ReportRow[]) {
 }
 
 function buildScopedReportWhere(params: ScopedReportParams): Prisma.CampaignReportWhereInput {
+  const andWhere: Prisma.CampaignReportWhereInput[] = [];
+
+  if (params.adType === "SA") {
+    andWhere.push({
+      OR: [{ platform: "GOOGLE" }, { platform: "NAVER", creativeName: null }]
+    });
+  }
+
+  if (params.adType === "DA") {
+    andWhere.push({
+      OR: [{ platform: { in: ["META", "KAKAO", "DAANGN"] } }, { platform: "NAVER", creativeName: { not: null } }]
+    });
+  }
+
+  if (params.platform && params.platform !== "ALL") {
+    if (params.platform === "GFA") {
+      andWhere.push({
+        platform: "NAVER",
+        creativeName: { not: null }
+      });
+    } else if (params.platform === "DANGGEUN") {
+      andWhere.push({ platform: "DAANGN" });
+    } else {
+      andWhere.push({ platform: params.platform });
+    }
+  }
+
   return {
     clientId: params.clientId,
     ...(params.startDate && params.endDate
@@ -121,8 +154,17 @@ function buildScopedReportWhere(params: ScopedReportParams): Prisma.CampaignRepo
           }
         }
       : {}),
-    ...(params.platform && params.platform !== "ALL" ? { platform: params.platform } : {}),
-    ...(params.campaignName && params.campaignName !== "ALL" ? { campaignName: params.campaignName } : {})
+    ...(params.campaignName && params.campaignName !== "ALL" ? { campaignName: params.campaignName } : {}),
+    ...(params.adGroupName && params.adGroupName !== "ALL" ? { adGroupName: params.adGroupName } : {}),
+    ...(params.adName && params.adName !== "ALL"
+      ? {
+          OR: [{ adName: params.adName }, { creativeName: params.adName }]
+        }
+      : {}),
+    ...(params.device && params.device !== "ALL" ? { device: params.device } : {}),
+    ...(params.keyword && params.keyword !== "ALL" ? { keyword: params.keyword } : {}),
+    ...(params.landingPage && params.landingPage !== "ALL" ? { landingPage: params.landingPage } : {}),
+    ...(andWhere.length ? { AND: andWhere } : {})
   };
 }
 
@@ -326,8 +368,17 @@ export async function listDistinctClientOptions(clientId: string) {
   if (await canUsePrisma()) {
     return prisma.campaignReport.findMany({
       where: { clientId },
-      select: { platform: true, campaignName: true },
-      distinct: ["platform", "campaignName"]
+      select: {
+        platform: true,
+        campaignName: true,
+        adGroupName: true,
+        adName: true,
+        creativeName: true,
+        device: true,
+        keyword: true,
+        landingPage: true
+      },
+      distinct: ["platform", "campaignName", "adGroupName", "adName", "creativeName", "device", "keyword", "landingPage"]
     });
   }
   if (isVercelRuntime()) {
@@ -336,7 +387,16 @@ export async function listDistinctClientOptions(clientId: string) {
   const reports = await listReportsByClient(clientId);
   const seen = new Set<string>();
   return reports.filter((report) => {
-    const key = `${report.platform}::${report.campaignName}`;
+    const key = [
+      report.platform,
+      report.campaignName,
+      report.adGroupName,
+      report.adName,
+      report.creativeName,
+      report.device,
+      report.keyword,
+      report.landingPage
+    ].join("::");
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -357,8 +417,29 @@ export async function listScopedReports(params: ScopedReportParams) {
   return reports.filter((report) => {
     if (params.startDate && report.date < params.startDate) return false;
     if (params.endDate && report.date > params.endDate) return false;
-    if (params.platform && params.platform !== "ALL" && report.platform !== params.platform) return false;
+    if (params.platform && params.platform !== "ALL") {
+      if (params.platform === "GFA") {
+        if (report.platform !== "NAVER" || !report.creativeName) return false;
+      } else if (params.platform === "DANGGEUN") {
+        if (report.platform !== "DAANGN") return false;
+      } else if (report.platform !== params.platform) {
+        return false;
+      }
+    }
     if (params.campaignName && params.campaignName !== "ALL" && report.campaignName !== params.campaignName) return false;
+    if (params.adGroupName && params.adGroupName !== "ALL" && report.adGroupName !== params.adGroupName) return false;
+    if (params.adName && params.adName !== "ALL" && report.adName !== params.adName && report.creativeName !== params.adName) return false;
+    if (params.device && params.device !== "ALL" && report.device !== params.device) return false;
+    if (params.keyword && params.keyword !== "ALL" && report.keyword !== params.keyword) return false;
+    if (params.landingPage && params.landingPage !== "ALL" && report.landingPage !== params.landingPage) return false;
+    if (params.adType === "SA") {
+      const isSa = report.platform === "GOOGLE" || (report.platform === "NAVER" && !report.creativeName);
+      if (!isSa) return false;
+    }
+    if (params.adType === "DA") {
+      const isDa = ["META", "KAKAO", "DAANGN"].includes(report.platform) || (report.platform === "NAVER" && Boolean(report.creativeName));
+      if (!isDa) return false;
+    }
     return true;
   });
 }
