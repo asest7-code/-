@@ -90,6 +90,11 @@ export function normalizeRowForDashboard(
     adNameFromRaw ??
     (reportLevel === "keyword" ? keyword ?? "(unassigned)" : reportLevel === "campaign" || reportLevel === "ad_group" ? "(unassigned)" : null);
 
+  const rawCreativeName = cleanText(row.creative_name);
+  const resolvedCreativeName =
+    rawCreativeName ??
+    (source.id === "naver_gfa" ? resolvedAdName : null);
+
   const mapped: ReportRow = {
     date: row.date,
     platform,
@@ -100,7 +105,7 @@ export function normalizeRowForDashboard(
     adName: resolvedAdName ?? "",
     device: cleanText(row.device),
     keyword,
-    creativeName: cleanText(row.creative_name),
+    creativeName: resolvedCreativeName,
     landingPage: cleanText(row.landing_page),
     impressions: row.impressions,
     clicks: row.clicks,

@@ -18,6 +18,8 @@ function toReportRow(row: {
   id: string;
   date: Date | string;
   platform: string;
+  sourceType?: string | null;
+  reportLevel?: ReportRow["reportLevel"];
   campaignName: string;
   adGroupName: string;
   adName: string;
@@ -34,7 +36,12 @@ function toReportRow(row: {
   leads: number | null;
   memo: string | null;
 }): ReportRow {
-  return { ...row, date: typeof row.date === "string" ? row.date.slice(0, 10) : format(row.date, "yyyy-MM-dd") };
+  return {
+    ...row,
+    sourceType: row.sourceType ?? null,
+    reportLevel: row.reportLevel ?? null,
+    date: typeof row.date === "string" ? row.date.slice(0, 10) : format(row.date, "yyyy-MM-dd")
+  };
 }
 
 async function resolveDashboardBase(clientSlug: string, filters: DashboardFilters = {}) {

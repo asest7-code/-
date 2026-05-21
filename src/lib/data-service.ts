@@ -98,6 +98,8 @@ function mergeDuplicateReportRows(rows: ReportRow[]) {
 
     merged.set(key, {
       ...current,
+      sourceType: current.sourceType ?? row.sourceType ?? null,
+      reportLevel: current.reportLevel ?? row.reportLevel ?? null,
       device: current.device ?? row.device ?? null,
       keyword: current.keyword ?? row.keyword ?? null,
       creativeName: current.creativeName ?? row.creativeName ?? null,
@@ -127,7 +129,10 @@ function buildScopedReportWhere(params: ScopedReportParams): Prisma.CampaignRepo
 
   if (params.adType === "DA") {
     andWhere.push({
-      OR: [{ platform: { in: ["META", "KAKAO", "DAANGN"] } }, { platform: "NAVER", creativeName: { not: null } }]
+      OR: [
+        { platform: { in: ["META", "KAKAO", "DAANGN"] } },
+        { platform: "NAVER", creativeName: { not: null }, keyword: null }
+      ]
     });
   }
 
@@ -135,7 +140,8 @@ function buildScopedReportWhere(params: ScopedReportParams): Prisma.CampaignRepo
     if (params.platform === "GFA") {
       andWhere.push({
         platform: "NAVER",
-        creativeName: { not: null }
+        creativeName: { not: null },
+        keyword: null
       });
     } else if (params.platform === "DANGGEUN") {
       andWhere.push({ platform: "DAANGN" });
@@ -433,11 +439,23 @@ export async function listScopedReports(params: ScopedReportParams) {
     if (params.keyword && params.keyword !== "ALL" && report.keyword !== params.keyword) return false;
     if (params.landingPage && params.landingPage !== "ALL" && report.landingPage !== params.landingPage) return false;
     if (params.adType === "SA") {
-      const isSa = report.platform === "GOOGLE" || (report.platform === "NAVER" && !report.creativeName);
+      const sourceType = String((report as ReportRow).sourceType ?? "").toLowerCase();
+      const isSa =
+        sourceType.includes("sa") ||
+        report.platform === "GOOGLE" ||
+        (report.platform === "NAVER" && Boolean(report.keyword)) ||
+        (report.platform === "NAVER" && !report.creativeName);
       if (!isSa) return false;
     }
     if (params.adType === "DA") {
-      const isDa = ["META", "KAKAO", "DAANGN"].includes(report.platform) || (report.platform === "NAVER" && Boolean(report.creativeName));
+      const sourceType = String((report as ReportRow).sourceType ?? "").toLowerCase();
+      const isDa =
+        sourceType.includes("gfa") ||
+        sourceType.includes("meta") ||
+        sourceType.includes("kakao") ||
+        sourceType.includes("daangn") ||
+        ["META", "KAKAO", "DAANGN"].includes(report.platform) ||
+        (report.platform === "NAVER" && Boolean(report.creativeName) && !report.keyword);
       if (!isDa) return false;
     }
     return true;
@@ -916,6 +934,8 @@ export async function upsertReports(clientId: string, rows: ReportRow[], uploadI
       clientId,
       date: row.date,
       platform: row.platform,
+      sourceType: row.sourceType ?? null,
+      reportLevel: row.reportLevel ?? null,
       campaignName: row.campaignName,
       adGroupName: row.adGroupName,
       adName: row.adName,

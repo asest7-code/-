@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import path from "path";
 import { promises as fs } from "fs";
+import type { ReportLevel } from "@/types/dashboard";
 
 type LocalUser = {
   id: string;
@@ -39,6 +40,8 @@ type LocalCampaignReport = {
   clientId: string;
   date: string;
   platform: string;
+  sourceType: string | null;
+  reportLevel: ReportLevel | null;
   campaignName: string;
   adGroupName: string;
   adName: string;
@@ -158,7 +161,34 @@ function normalizeDb(raw: any): LocalDb {
         }))
       : [],
     uploads: Array.isArray(raw?.uploads) ? raw.uploads : [],
-    reports: Array.isArray(raw?.reports) ? raw.reports : [],
+    reports: Array.isArray(raw?.reports)
+      ? raw.reports.map((report: any) => ({
+          id: report.id,
+          clientId: report.clientId,
+          date: report.date,
+          platform: report.platform,
+          sourceType: report.sourceType ?? null,
+          reportLevel: report.reportLevel ?? null,
+          campaignName: report.campaignName,
+          adGroupName: report.adGroupName,
+          adName: report.adName,
+          device: report.device ?? null,
+          keyword: report.keyword ?? null,
+          creativeName: report.creativeName ?? null,
+          landingPage: report.landingPage ?? null,
+          impressions: Number(report.impressions) || 0,
+          clicks: Number(report.clicks) || 0,
+          cost: Number(report.cost) || 0,
+          conversions: Number(report.conversions) || 0,
+          revenue: Number(report.revenue) || 0,
+          purchases: report.purchases == null ? null : Number(report.purchases) || 0,
+          leads: report.leads == null ? null : Number(report.leads) || 0,
+          memo: report.memo ?? null,
+          uploadId: report.uploadId ?? null,
+          createdAt: report.createdAt,
+          updatedAt: report.updatedAt
+        }))
+      : [],
     accessLogs: Array.isArray(raw?.accessLogs) ? raw.accessLogs : []
   };
 }
