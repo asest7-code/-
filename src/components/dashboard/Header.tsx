@@ -24,14 +24,14 @@ export function DashboardHeader({
   onShare: () => void;
 }) {
   return (
-    <header className="panel flex flex-col gap-4 p-4 sm:p-5">
+    <header className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
-          <button className="btn-secondary px-3 lg:hidden" onClick={onMenuClick}>
+          <button className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 lg:hidden" onClick={onMenuClick}>
             메뉴
           </button>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">AdDash Workspace</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Advertising Performance Dashboard</p>
             <h1 className="mt-1 text-2xl font-bold text-slate-950">{clientName} 광고 성과 대시보드</h1>
             <p className="mt-2 text-sm text-slate-500">{getSectionTitle(section, subSection)}</p>
           </div>

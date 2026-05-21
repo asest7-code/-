@@ -64,8 +64,8 @@ export function DataTable<T>({
   const pagedRows = sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="flex flex-col gap-3 border-b p-4">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 p-4">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="text-base font-bold text-slate-950">{title}</h3>
@@ -105,9 +105,7 @@ export function DataTable<T>({
                   >
                     <span>{column.header}</span>
                     {column.sortValue ? (
-                      <span className="text-xs">
-                        {sortKey === column.key ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
-                      </span>
+                      <span className="text-xs">{sortKey === column.key ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}</span>
                     ) : null}
                   </button>
                 </th>
@@ -116,7 +114,7 @@ export function DataTable<T>({
           </thead>
           <tbody>
             {pagedRows.map((row, index) => (
-              <tr key={index} className="border-t">
+              <tr key={index} className="border-t border-slate-100">
                 {columns.map((column) => (
                   <td key={column.key} className="px-3 py-3 align-top">
                     {column.render(row)}
@@ -135,16 +133,16 @@ export function DataTable<T>({
         </table>
       </div>
 
-      <div className="flex items-center justify-between border-t p-4 text-sm">
+      <div className="flex items-center justify-between border-t border-slate-200 p-4 text-sm">
         <span>
           총 {sortedRows.length.toLocaleString("ko-KR")}개 / {safePage}페이지
         </span>
         <div className="flex gap-2">
-          <button className="btn-secondary" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+          <button className="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:opacity-50" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
             이전
           </button>
           <button
-            className="btn-secondary"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
             disabled={safePage === totalPages}
             onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
           >

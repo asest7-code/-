@@ -102,6 +102,8 @@ function buildCompareSeries(currentRows: ReportRow[], previousRows: ReportRow[])
 
 function createSectionPayload(section: DashboardSectionId, subSection: string, rows: ReportRow[], previousRows: ReportRow[]): DashboardSectionPayload {
   const summary = buildExtendedComparison(calculateExtendedMetrics(rows), calculateExtendedMetrics(previousRows));
+  const adTypeRows = sortBreakdownRows(groupRowsByDimension(rows, previousRows, "adType"), "cost");
+  const sourceTypeRows = sortBreakdownRows(groupRowsByDimension(rows, previousRows, "sourceType"), "cost");
   const platformRows = sortBreakdownRows(groupRowsByDimension(rows, previousRows, "platform"), "cost");
   const campaignRows = sortBreakdownRows(groupRowsByDimension(rows, previousRows, "campaign"), "cost");
   const adGroupRows = sortBreakdownRows(groupRowsByDimension(rows, previousRows, "adGroup"), "cost");
@@ -119,6 +121,8 @@ function createSectionPayload(section: DashboardSectionId, subSection: string, r
     previous: calculateExtendedMetrics(previousRows),
     timeSeries,
     compareSeries,
+    adTypeRows,
+    sourceTypeRows,
     platformRows,
     campaignRows,
     adGroupRows,

@@ -1,7 +1,7 @@
 import { buildBreakdownRow, getAdTypeForRow } from "@/lib/dashboard/metrics";
 import type { BreakdownRow, ReportRow } from "@/types/dashboard";
 
-type Dimension = "date" | "platform" | "campaign" | "adGroup" | "creative" | "keyword" | "landing";
+type Dimension = "date" | "platform" | "campaign" | "adGroup" | "creative" | "keyword" | "landing" | "adType" | "sourceType";
 
 type GroupDescriptor = {
   label: string;
@@ -46,7 +46,7 @@ function getDescriptor(row: ReportRow, dimension: Dimension) {
 
   if (dimension === "date") {
     return {
-      id: `${row.date}::${row.platform}`,
+      id: `${row.date}`,
       label: row.date,
       extra: { platform: row.platform, adType }
     };
@@ -54,8 +54,25 @@ function getDescriptor(row: ReportRow, dimension: Dimension) {
 
   if (dimension === "platform") {
     return {
-      id: row.platform,
-      label: row.platform,
+      id: String(row.platform),
+      label: String(row.platform),
+      extra: { platform: row.platform, adType }
+    };
+  }
+
+  if (dimension === "adType") {
+    return {
+      id: adType,
+      label: adType,
+      extra: { adType }
+    };
+  }
+
+  if (dimension === "sourceType") {
+    const sourceType = row.sourceType || "(미지정)";
+    return {
+      id: sourceType,
+      label: sourceType,
       extra: { platform: row.platform, adType }
     };
   }

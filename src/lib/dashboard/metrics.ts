@@ -27,10 +27,12 @@ const EMPTY_METRICS: ExtendedMetricSummary = {
   leadRate: 0
 };
 
-export function getAdTypeForRow(row: Pick<ReportRow, "platform" | "keyword" | "creativeName">): Exclude<DashboardAdType, "ALL"> {
+export function getAdTypeForRow(row: Pick<ReportRow, "platform" | "keyword" | "creativeName" | "sourceType">): Exclude<DashboardAdType, "ALL"> {
+  const sourceType = String(row.sourceType ?? "").toUpperCase();
   const platform = String(row.platform ?? "").toUpperCase();
 
-  if (platform === "GOOGLE") return "SA";
+  if (sourceType.includes("GFA") || sourceType.includes("META") || sourceType.includes("KAKAO") || sourceType.includes("DAANGN")) return "DA";
+  if (sourceType.includes("SA") || platform === "GOOGLE") return "SA";
   if (platform === "NAVER") return row.creativeName ? "DA" : "SA";
   if (["META", "KAKAO", "DAANGN", "DANGGEUN", "GFA"].includes(platform)) return "DA";
 
@@ -58,15 +60,7 @@ export function calculateExtendedMetrics(
       purchases: acc.purchases + (Number(row.purchases) || 0),
       leads: acc.leads + (Number(row.leads) || 0)
     }),
-    {
-      cost: 0,
-      impressions: 0,
-      clicks: 0,
-      conversions: 0,
-      revenue: 0,
-      purchases: 0,
-      leads: 0
-    }
+    { cost: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0, purchases: 0, leads: 0 }
   );
 
   return {
@@ -81,11 +75,11 @@ export function calculateExtendedMetrics(
     cpa: round(safeDivide(sums.cost, sums.conversions)),
     cvr: round(safeDivide(sums.conversions, sums.clicks) * 100),
     roas: round(safeDivide(sums.revenue, sums.cost) * 100),
-    purchases: round(Number(sums.purchases ?? 0)),
-    leads: round(Number(sums.leads ?? 0)),
-    aov: round(safeDivide(Number(sums.revenue ?? 0), Number(sums.purchases ?? 0))),
-    purchaseRate: round(safeDivide(Number(sums.purchases ?? 0), Number(sums.clicks ?? 0)) * 100),
-    leadRate: round(safeDivide(Number(sums.leads ?? 0), Number(sums.clicks ?? 0)) * 100)
+    purchases: round(sums.purchases),
+    leads: round(sums.leads),
+    aov: round(safeDivide(sums.revenue, sums.purchases)),
+    purchaseRate: round(safeDivide(sums.purchases, sums.clicks) * 100),
+    leadRate: round(safeDivide(sums.leads, sums.clicks) * 100)
   };
 }
 

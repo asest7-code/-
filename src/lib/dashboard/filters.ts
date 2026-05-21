@@ -50,6 +50,10 @@ export const KEYWORD_EXCLUSION_RULES = {
   requiredConversions: 0
 } as const;
 
+function toDateString(value: Date) {
+  return format(value, "yyyy-MM-dd");
+}
+
 export function getDatePresets(): DashboardDatePreset[] {
   const today = new Date();
   const yesterday = subDays(today, 1);
@@ -57,8 +61,6 @@ export function getDatePresets(): DashboardDatePreset[] {
   const lastMonthBase = subMonths(today, 1);
   const lastMonthStart = startOfMonth(lastMonthBase);
   const lastMonthEnd = endOfMonth(lastMonthBase);
-
-  const toDateString = (value: Date) => format(value, "yyyy-MM-dd");
 
   return [
     { key: "today", label: "오늘", startDate: toDateString(today), endDate: toDateString(today) },

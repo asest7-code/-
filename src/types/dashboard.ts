@@ -134,6 +134,8 @@ export type DashboardSectionPayload = {
   previous: ExtendedMetricSummary;
   timeSeries: Array<{ date: string; cost: number; clicks: number; conversions: number; revenue: number; roas: number }>;
   compareSeries?: ComparePoint[];
+  adTypeRows: BreakdownRow[];
+  sourceTypeRows: BreakdownRow[];
   platformRows: BreakdownRow[];
   campaignRows: BreakdownRow[];
   adGroupRows: BreakdownRow[];

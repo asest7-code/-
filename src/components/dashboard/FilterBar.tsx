@@ -26,17 +26,17 @@ export function FilterBar({
   const exportQuery = useMemo(() => buildDashboardQuery(filters, password).toString(), [filters, password]);
 
   return (
-    <section className="panel p-4">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 flex-1">
-            <p className="label">빠른 기간 선택</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">빠른 기간 선택</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {presets.map((preset) => (
                 <button
                   key={preset.key}
                   className={`rounded-md px-3 py-2 text-sm font-semibold ${
-                    activePreset === preset.key ? "bg-brand-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    activePreset === preset.key ? "bg-sky-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                   }`}
                   onClick={() => onChange({ ...filters, startDate: preset.startDate, endDate: preset.endDate })}
                 >
@@ -47,7 +47,7 @@ export function FilterBar({
           </div>
 
           <div className="w-full xl:max-w-[360px]">
-            <span className="label">사용 중인 기간</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">선택 기간</span>
             <button
               className="mt-2 flex w-full items-center justify-between rounded-md border border-slate-300 bg-white px-4 py-3 text-left hover:border-slate-400"
               onClick={() => setShowDateEditor((value) => !value)}
@@ -64,15 +64,15 @@ export function FilterBar({
         {showDateEditor ? (
           <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:grid-cols-3">
             <label>
-              <span className="label">시작일</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">시작일</span>
               <input className="input mt-1 bg-white" type="date" value={filters.startDate ?? ""} onChange={(event) => onChange({ ...filters, startDate: event.target.value })} />
             </label>
             <label>
-              <span className="label">종료일</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">종료일</span>
               <input className="input mt-1 bg-white" type="date" value={filters.endDate ?? ""} onChange={(event) => onChange({ ...filters, endDate: event.target.value })} />
             </label>
             <label>
-              <span className="label">비교 기간</span>
+              <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">비교 기간</span>
               <select className="input mt-1 bg-white" value={filters.compareMode ?? "previous"} onChange={(event) => onChange({ ...filters, compareMode: event.target.value as DashboardFilters["compareMode"] })}>
                 <option value="previous">이전 기간 대비</option>
                 <option value="month">전월 대비</option>
@@ -84,10 +84,10 @@ export function FilterBar({
         ) : null}
 
         <div className="grid gap-3 lg:grid-cols-4">
-          <SelectField label="매체 필터" value={filters.platform ?? "ALL"} options={["ALL", ...getVisibleOptions(options.platforms)]} onChange={(value) => onChange({ ...filters, platform: value })} />
+          <SelectField label="매체" value={filters.platform ?? "ALL"} options={["ALL", ...getVisibleOptions(options.platforms)]} onChange={(value) => onChange({ ...filters, platform: value })} />
           <SelectField label="광고 유형" value={filters.adType ?? "ALL"} options={["ALL", "SA", "DA"]} onChange={(value) => onChange({ ...filters, adType: value as DashboardFilters["adType"] })} />
           <SelectField label="캠페인" value={filters.campaign ?? "ALL"} options={["ALL", ...getVisibleOptions(options.campaigns)]} onChange={(value) => onChange({ ...filters, campaign: value })} />
-          <button className="btn-secondary mt-auto" onClick={() => setShowAdvanced((value) => !value)}>
+          <button className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => setShowAdvanced((value) => !value)}>
             {showAdvanced ? "상세 필터 닫기" : "상세 필터 열기"}
           </button>
         </div>
@@ -122,7 +122,7 @@ function SelectField({
 }) {
   return (
     <label>
-      <span className="label">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{label}</span>
       <select className="input mt-1" value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((option) => (
           <option key={option} value={option}>
