@@ -1,9 +1,12 @@
 export type Platform = "NAVER" | "GOOGLE" | "META" | "KAKAO" | "TIKTOK" | "GA4" | string;
+export type ReportLevel = "campaign" | "ad_group" | "ad" | "keyword";
 
 export type ReportRow = {
   id?: string;
   date: string;
   platform: Platform;
+  sourceType?: string | null;
+  reportLevel?: ReportLevel | null;
   campaignName: string;
   adGroupName: string;
   adName: string;

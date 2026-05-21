@@ -4,43 +4,19 @@ import { z } from "zod";
 import { scoreSource } from "@/services/upload/utils";
 import { uploadSources } from "@/services/upload/sources";
 import { detectUploadSource } from "@/services/upload/detector";
+import { cleanText, inferReportLevel, normalizeDateValue, normalizeRowForDashboard } from "@/services/upload/policy";
 import { buildAliasLookup, normalizeHeaderToken } from "@/services/upload/utils";
-import type { CanonicalColumn, NormalizedWorkbook, UploadParseResult, UploadSourceDefinition } from "@/services/upload/types";
+import type { CanonicalColumn, NormalizedWorkbook, ReportLevel, UploadParseResult, UploadSourceDefinition } from "@/services/upload/types";
 import type { ReportRow } from "@/types/dashboard";
 
-const hardRequiredColumns = ["date", "campaign_name", "ad_group_name", "ad_name", "impressions", "clicks", "cost"] satisfies CanonicalColumn[];
-
-function normalizeDateValue(value: unknown) {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString().slice(0, 10);
-  }
-
-  const raw = String(value ?? "").trim();
-  const dotted = raw.match(/^(\d{4})\.(\d{2})\.(\d{2})\.?$/);
-  if (dotted) {
-    return `${dotted[1]}-${dotted[2]}-${dotted[3]}`;
-  }
-  const slashed = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (slashed) {
-    const month = slashed[1].padStart(2, "0");
-    const day = slashed[2].padStart(2, "0");
-    const year = slashed[3].length === 2 ? `20${slashed[3]}` : slashed[3];
-    return `${year}-${month}-${day}`;
-  }
-  return raw;
-}
-
-function cleanText(value: string | null | undefined) {
-  if (!value) return null;
-  return value.replace(/^'+/, "").trim() || null;
-}
+const hardRequiredColumns = ["date", "campaign_name", "impressions", "clicks", "cost"] satisfies CanonicalColumn[];
 
 const rowSchema = z.object({
   date: z.preprocess(normalizeDateValue, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD.")),
-  platform: z.string().min(1),
+  platform: z.string().optional().nullable(),
   campaign_name: z.string().min(1),
-  ad_group_name: z.string().min(1),
-  ad_name: z.string().min(1),
+  ad_group_name: z.string().optional().nullable(),
+  ad_name: z.string().optional().nullable(),
   impressions: z.coerce.number().int().nonnegative(),
   clicks: z.coerce.number().int().nonnegative(),
   cost: z.coerce.number().nonnegative(),
@@ -74,10 +50,10 @@ function parseSpecialNaverKeywordReport(fileName: string, text: string): Normali
     .filter(Boolean);
 
   if (lines.length < 3) return null;
-  if (!lines[0].includes("\uAC80\uC0C9\uC5B4 \uBCF4\uACE0\uC11C") && !fileName.includes("\uAC80\uC0C9\uC5B4")) return null;
+  if (!lines[0].includes("검색어 보고서") && !fileName.includes("검색어")) return null;
 
   const headers = lines[1].split(",").map((item) => item.trim());
-  const expectedPrefix = ["\uCEA0\uD398\uC778", "\uAD11\uACE0\uADF8\uB8F9", "\uAC80\uC0C9\uC5B4"];
+  const expectedPrefix = ["캠페인", "광고그룹", "검색어"];
   if (!expectedPrefix.every((value, index) => headers[index] === value)) return null;
 
   const rows = lines.slice(2).map((line) => {
@@ -202,6 +178,7 @@ function validateAndMapRows(rows: Record<string, unknown>[], source: UploadSourc
   const columns = Object.keys(rows[0] ?? {});
   const missing = hardRequiredColumns.filter((column) => !columns.includes(column));
   const errors = missing.map((column) => `Missing required column for ${source.label}: ${column}`);
+  const reportLevel = inferReportLevel(rows, source);
 
   const mappedRows: ReportRow[] = [];
   rows.forEach((rawRow, index) => {
@@ -214,28 +191,16 @@ function validateAndMapRows(rows: Record<string, unknown>[], source: UploadSourc
     }
 
     const row = parsed.data;
-    mappedRows.push({
-      date: row.date,
-      platform: String(row.platform || source.platformValue).toUpperCase(),
-      campaignName: row.campaign_name,
-      adGroupName: row.ad_group_name,
-      adName: cleanText(row.ad_name) ?? "",
-      device: cleanText(row.device),
-      keyword: cleanText(row.keyword),
-      creativeName: cleanText(row.creative_name),
-      landingPage: cleanText(row.landing_page),
-      impressions: row.impressions,
-      clicks: row.clicks,
-      cost: row.cost,
-      conversions: row.conversions ?? 0,
-      revenue: row.revenue ?? 0,
-      purchases: row.purchases ?? null,
-      leads: row.leads ?? null,
-      memo: cleanText(row.memo)
-    });
+    const normalized = normalizeRowForDashboard(row, source, reportLevel);
+    if (normalized.missingLabels.length > 0) {
+      errors.push(`Row ${index + 2} is missing required values for ${reportLevel}: ${normalized.missingLabels.join(", ")}`);
+      return;
+    }
+
+    mappedRows.push(normalized.mapped);
   });
 
-  return { columns, errors, mappedRows };
+  return { columns, errors, mappedRows, reportLevel };
 }
 
 export async function parseUploadFile(file: File): Promise<UploadParseResult> {
@@ -249,10 +214,12 @@ export async function parseUploadFile(file: File): Promise<UploadParseResult> {
   const normalizedWorkbook = specialCsv ?? workbookToJson(file, workbook!);
   const detectedSource = detectUploadSource(normalizedWorkbook.fileName, normalizedWorkbook.sheetName, normalizedWorkbook.headers);
   const normalizedRows = normalizeRows(normalizedWorkbook.rows, detectedSource);
-  const { columns, errors, mappedRows } = validateAndMapRows(normalizedRows, detectedSource);
+  const { columns, errors, mappedRows, reportLevel } = validateAndMapRows(normalizedRows, detectedSource);
+  const platform = mappedRows[0]?.platform ?? detectedSource.platformValue ?? "";
 
   if (errors.length > 0 && columns.length > 0) {
     errors.push(`Detected format: ${detectedSource.label}`);
+    errors.push(`Detected report level: ${reportLevel}`);
     errors.push(`Recognized columns: ${columns.join(", ")}`);
   }
 
@@ -261,7 +228,10 @@ export async function parseUploadFile(file: File): Promise<UploadParseResult> {
     preview: mappedRows.slice(0, 20),
     errors,
     columns,
-    detectedFormat: detectedSource.id
+    detectedFormat: detectedSource.id,
+    sourceType: detectedSource.id,
+    reportLevel,
+    platform
   };
 }
 

@@ -35,6 +35,8 @@ type ParsedUploadState = {
   rows: ReportRow[];
   preview: ReportRow[];
   detectedFormat: string;
+  platform: string;
+  reportLevel: string;
   errors: string[];
 };
 
@@ -140,6 +142,8 @@ export default function UploadPage() {
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [detectedFormat, setDetectedFormat] = useState("");
+  const [detectedPlatform, setDetectedPlatform] = useState("");
+  const [detectedReportLevel, setDetectedReportLevel] = useState("");
   const [loading, setLoading] = useState(false);
   const [progressText, setProgressText] = useState("");
   const [uploads, setUploads] = useState<UploadHistoryRow[]>([]);
@@ -230,6 +234,8 @@ export default function UploadPage() {
         setErrors(["한 번에 최대 100,000행까지 업로드할 수 있습니다."]);
         setPreview(parsed.preview ?? []);
         setDetectedFormat(parsed.detectedFormat ?? "");
+        setDetectedPlatform(parsed.platform ?? "");
+        setDetectedReportLevel(parsed.reportLevel ?? "");
         setRowCount(parsed.rows.length);
         return;
       }
@@ -238,6 +244,8 @@ export default function UploadPage() {
         setErrors(parsed.errors);
         setPreview(parsed.preview ?? []);
         setDetectedFormat(parsed.detectedFormat ?? "");
+        setDetectedPlatform(parsed.platform ?? "");
+        setDetectedReportLevel(parsed.reportLevel ?? "");
         setRowCount(parsed.rows.length);
         return;
       }
@@ -245,6 +253,8 @@ export default function UploadPage() {
       setPreview(parsed.preview ?? []);
       setRowCount(parsed.rows.length);
       setDetectedFormat(parsed.detectedFormat ?? "");
+      setDetectedPlatform(parsed.platform ?? "");
+      setDetectedReportLevel(parsed.reportLevel ?? "");
       setMessage(`${formatNumber(parsed.rows.length)}행 검증이 완료됐습니다. 아래 미리보기와 병합 결과를 확인해 주세요.`);
     } catch (error) {
       setErrors([error instanceof Error ? error.message : "업로드 파일을 분석하지 못했습니다."]);
@@ -375,6 +385,8 @@ export default function UploadPage() {
     setErrors([]);
     setMessage("");
     setDetectedFormat("");
+    setDetectedPlatform("");
+    setDetectedReportLevel("");
     setProgressText("");
   }
 
@@ -535,7 +547,13 @@ export default function UploadPage() {
 
             {message ? <Notice tone="blue">{message}</Notice> : null}
             {progressText ? <Notice tone="slate">{progressText}</Notice> : null}
-            {detectedFormat ? <Notice tone="amber">감지된 업로드 형식: {detectedFormat.toUpperCase()}</Notice> : null}
+            {detectedFormat ? (
+              <Notice tone="amber">
+                감지된 업로드 형식: {detectedFormat.toUpperCase()}
+                {detectedPlatform ? ` / 저장 매체: ${detectedPlatform}` : ""}
+                {detectedReportLevel ? ` / 보고서 레벨: ${detectedReportLevel}` : ""}
+              </Notice>
+            ) : null}
 
             {errors.length > 0 ? (
               <div className="rounded-lg bg-red-50 p-4 text-sm font-semibold text-red-700">

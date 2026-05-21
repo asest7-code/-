@@ -23,9 +23,13 @@ export type UploadParseResult = {
   errors: string[];
   columns: string[];
   detectedFormat: UploadSourceId;
+  sourceType: UploadSourceId;
+  reportLevel: ReportLevel;
+  platform: string;
 };
 
-export type UploadSourceId = "generic" | "naver" | "daangn" | "kakao" | "meta" | "google";
+export type UploadSourceId = "generic" | "naver_sa" | "naver_gfa" | "daangn_ads" | "kakao_moment" | "meta_ads" | "google_ads";
+export type ReportLevel = "campaign" | "ad_group" | "ad" | "keyword";
 
 export type UploadSourceDefinition = {
   id: UploadSourceId;
