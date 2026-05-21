@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { makeLocalId, readLocalDb, writeLocalDb } from "@/lib/local-store";
 import type { ReportRow } from "@/types/dashboard";
+import { calculateMetricsFromTotals, groupByDate, round } from "@/utils/metrics";
 
 type ClientInput = {
   name: string;
@@ -49,6 +50,10 @@ function isVercelRuntime() {
 }
 
 async function canUsePrisma() {
+  if (isVercelRuntime()) {
+    return true;
+  }
+
   if (!prismaAvailablePromise) {
     prismaAvailablePromise = prisma
       .$connect()
@@ -127,7 +132,6 @@ export async function getStorageMode() {
 
 export async function getUserByEmail(email: string) {
   const usePrisma = await canUsePrisma();
-  console.info("[data-service] getUserByEmail mode", { email, usePrisma, vercel: Boolean(process.env.VERCEL) });
 
   if (usePrisma) {
     return prisma.user.findUnique({ where: { email } });
@@ -403,6 +407,208 @@ export async function aggregateScopedReportMetrics(params: ScopedReportParams) {
       revenue: 0
     }
   );
+}
+
+export async function aggregateScopedTimeSeries(params: ScopedReportParams) {
+  if (await canUsePrisma()) {
+    const rows = await prisma.campaignReport.groupBy({
+      by: ["date"],
+      where: buildScopedReportWhere(params),
+      _sum: {
+        cost: true,
+        impressions: true,
+        clicks: true,
+        conversions: true,
+        revenue: true
+      },
+      orderBy: { date: "asc" }
+    });
+
+    return rows.map((row) => {
+      const metrics = calculateMetricsFromTotals({
+        cost: row._sum.cost ?? 0,
+        impressions: row._sum.impressions ?? 0,
+        clicks: row._sum.clicks ?? 0,
+        conversions: row._sum.conversions ?? 0,
+        revenue: row._sum.revenue ?? 0
+      });
+
+      return {
+        date: toDateOnly(row.date),
+        cost: metrics.cost,
+        clicks: metrics.clicks,
+        conversions: metrics.conversions,
+        revenue: metrics.revenue,
+        roas: metrics.roas
+      };
+    });
+  }
+
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const rows = await listScopedReports(params);
+  return groupByDate(
+    rows.map((row) => ({
+      ...row,
+      date: toDateOnly(row.date)
+    }))
+  ).map((item) => ({
+    date: item.date,
+    cost: item.cost,
+    clicks: item.clicks,
+    conversions: item.conversions,
+    revenue: item.revenue,
+    roas: item.roas
+  }));
+}
+
+export async function aggregateScopedPlatformBreakdown(params: ScopedReportParams) {
+  if (await canUsePrisma()) {
+    const rows = await prisma.campaignReport.groupBy({
+      by: ["platform"],
+      where: buildScopedReportWhere(params),
+      _sum: {
+        cost: true,
+        impressions: true,
+        clicks: true,
+        conversions: true,
+        revenue: true
+      },
+      orderBy: { platform: "asc" }
+    });
+
+    return rows.map((row) => {
+      const metrics = calculateMetricsFromTotals({
+        cost: row._sum.cost ?? 0,
+        impressions: row._sum.impressions ?? 0,
+        clicks: row._sum.clicks ?? 0,
+        conversions: row._sum.conversions ?? 0,
+        revenue: row._sum.revenue ?? 0
+      });
+
+      return {
+        platform: row.platform,
+        cost: metrics.cost,
+        conversions: metrics.conversions,
+        revenue: metrics.revenue,
+        roas: metrics.roas
+      };
+    });
+  }
+
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const rows = await listScopedReports(params);
+  const grouped = new Map<string, typeof rows>();
+  rows.forEach((row) => {
+    const current = grouped.get(row.platform) ?? [];
+    current.push(row);
+    grouped.set(row.platform, current);
+  });
+
+  return Array.from(grouped.entries()).map(([platform, groupedRows]) => {
+    const metrics = calculateMetricsFromTotals(
+      groupedRows.reduce(
+        (acc, row) => {
+          acc.cost += Number(row.cost) || 0;
+          acc.impressions += Number(row.impressions) || 0;
+          acc.clicks += Number(row.clicks) || 0;
+          acc.conversions += Number(row.conversions) || 0;
+          acc.revenue += Number(row.revenue) || 0;
+          return acc;
+        },
+        { cost: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 }
+      )
+    );
+
+    return {
+      platform,
+      cost: metrics.cost,
+      conversions: metrics.conversions,
+      revenue: metrics.revenue,
+      roas: metrics.roas
+    };
+  });
+}
+
+export async function aggregateScopedCampaignRankings(params: ScopedReportParams) {
+  if (await canUsePrisma()) {
+    const rows = await prisma.campaignReport.groupBy({
+      by: ["campaignName"],
+      where: buildScopedReportWhere(params),
+      _sum: {
+        cost: true,
+        impressions: true,
+        clicks: true,
+        conversions: true,
+        revenue: true
+      }
+    });
+
+    return rows
+      .map((row) => {
+        const metrics = calculateMetricsFromTotals({
+          cost: row._sum.cost ?? 0,
+          impressions: row._sum.impressions ?? 0,
+          clicks: row._sum.clicks ?? 0,
+          conversions: row._sum.conversions ?? 0,
+          revenue: row._sum.revenue ?? 0
+        });
+
+        return {
+          campaignName: row.campaignName,
+          cost: metrics.cost,
+          conversions: metrics.conversions,
+          revenue: metrics.revenue,
+          roas: metrics.roas,
+          cpa: metrics.cpa
+        };
+      })
+      .sort((a, b) => b.roas - a.roas);
+  }
+
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const rows = await listScopedReports(params);
+  const grouped = new Map<string, typeof rows>();
+  rows.forEach((row) => {
+    const current = grouped.get(row.campaignName) ?? [];
+    current.push(row);
+    grouped.set(row.campaignName, current);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([campaignName, groupedRows]) => {
+      const metrics = calculateMetricsFromTotals(
+        groupedRows.reduce(
+          (acc, row) => {
+            acc.cost += Number(row.cost) || 0;
+            acc.impressions += Number(row.impressions) || 0;
+            acc.clicks += Number(row.clicks) || 0;
+            acc.conversions += Number(row.conversions) || 0;
+            acc.revenue += Number(row.revenue) || 0;
+            return acc;
+          },
+          { cost: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 }
+        )
+      );
+
+      return {
+        campaignName,
+        cost: metrics.cost,
+        conversions: metrics.conversions,
+        revenue: metrics.revenue,
+        roas: metrics.roas,
+        cpa: metrics.cpa
+      };
+    })
+    .sort((a, b) => b.roas - a.roas);
 }
 
 export async function listRecentUploads(take = 6) {

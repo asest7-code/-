@@ -15,7 +15,6 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) {
-          console.warn("[auth] Missing credentials payload");
           return null;
         }
 
@@ -23,12 +22,10 @@ export const authOptions: NextAuthOptions = {
           const user = await getUserByEmail(credentials.email);
 
           if (!user) {
-            console.warn("[auth] User not found", { email: credentials.email });
             return null;
           }
 
           const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
-          console.info("[auth] Password comparison result", { email: credentials.email, isValid });
 
           if (!isValid) return null;
 

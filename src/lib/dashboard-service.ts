@@ -1,7 +1,17 @@
 import { format, subDays } from "date-fns";
-import { aggregateScopedReportMetrics, getClientBySlug, getReportDateRange, listDistinctClientOptions, listScopedReports } from "@/lib/data-service";
+import { unstable_cache } from "next/cache";
+import {
+  aggregateScopedCampaignRankings,
+  aggregateScopedPlatformBreakdown,
+  aggregateScopedReportMetrics,
+  aggregateScopedTimeSeries,
+  getClientBySlug,
+  getReportDateRange,
+  listDistinctClientOptions,
+  listScopedReports
+} from "@/lib/data-service";
 import { generateReportSummary } from "@/services/ai/report-summary";
-import { calculateMetrics, calculateMetricsFromTotals, compareMetrics, getPreviousRange, groupByDate } from "@/utils/metrics";
+import { calculateMetricsFromTotals, compareMetrics, getPreviousRange } from "@/utils/metrics";
 import type { DashboardAnalyticsPayload, DashboardFilters, DashboardPayload, DashboardShellPayload, ReportRow } from "@/types/dashboard";
 
 function toReportRow(row: {
@@ -55,6 +65,15 @@ async function resolveDashboardBase(clientSlug: string, filters: DashboardFilter
     scopedFilters,
     previousRange
   };
+}
+
+function makeFilterCacheKey(filters: DashboardFilters = {}) {
+  return JSON.stringify({
+    startDate: filters.startDate ?? "",
+    endDate: filters.endDate ?? "",
+    platform: filters.platform ?? "",
+    campaign: filters.campaign ?? ""
+  });
 }
 
 export async function getDashboardShellPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardShellPayload | null> {
@@ -116,39 +135,31 @@ export async function getDashboardAnalyticsPayload(clientSlug: string, filters: 
   const resolved = await resolveDashboardBase(clientSlug, filters);
   if (!resolved) return null;
 
-  const currentRowsRaw = await listScopedReports({
-    clientId: resolved.client.id,
-    startDate: resolved.scopedFilters.startDate,
-    endDate: resolved.scopedFilters.endDate,
-    platform: resolved.scopedFilters.platform,
-    campaignName: resolved.scopedFilters.campaign
-  });
+  const [timeSeries, platformBreakdown, campaignRankings, shell] = await Promise.all([
+    aggregateScopedTimeSeries({
+      clientId: resolved.client.id,
+      startDate: resolved.scopedFilters.startDate,
+      endDate: resolved.scopedFilters.endDate,
+      platform: resolved.scopedFilters.platform,
+      campaignName: resolved.scopedFilters.campaign
+    }),
+    aggregateScopedPlatformBreakdown({
+      clientId: resolved.client.id,
+      startDate: resolved.scopedFilters.startDate,
+      endDate: resolved.scopedFilters.endDate,
+      platform: resolved.scopedFilters.platform,
+      campaignName: resolved.scopedFilters.campaign
+    }),
+    aggregateScopedCampaignRankings({
+      clientId: resolved.client.id,
+      startDate: resolved.scopedFilters.startDate,
+      endDate: resolved.scopedFilters.endDate,
+      platform: resolved.scopedFilters.platform,
+      campaignName: resolved.scopedFilters.campaign
+    }),
+    getDashboardShellPayload(clientSlug, filters)
+  ]);
 
-  const currentRows = currentRowsRaw.map(toReportRow);
-
-  const timeSeries = groupByDate(currentRows).map((item) => ({
-    date: item.date,
-    cost: item.cost,
-    clicks: item.clicks,
-    conversions: item.conversions,
-    revenue: item.revenue,
-    roas: item.roas
-  }));
-
-  const platformMap = new Map<string, ReportRow[]>();
-  currentRows.forEach((row) => platformMap.set(row.platform, [...(platformMap.get(row.platform) ?? []), row]));
-  const platformBreakdown = Array.from(platformMap.entries()).map(([platform, rows]) => ({
-    platform,
-    ...calculateMetrics(rows)
-  }));
-
-  const campaignMap = new Map<string, ReportRow[]>();
-  currentRows.forEach((row) => campaignMap.set(row.campaignName, [...(campaignMap.get(row.campaignName) ?? []), row]));
-  const campaignRankings = Array.from(campaignMap.entries())
-    .map(([campaignName, rows]) => ({ campaignName, ...calculateMetrics(rows) }))
-    .sort((a, b) => b.roas - a.roas);
-
-  const shell = await getDashboardShellPayload(clientSlug, filters);
   if (!shell) return null;
 
   const reportSummaryInput = {
@@ -163,6 +174,20 @@ export async function getDashboardAnalyticsPayload(clientSlug: string, filters: 
     campaignRankings,
     reportText: generateReportSummary(reportSummaryInput)
   };
+}
+
+export async function getCachedDashboardShellPayload(clientSlug: string, filters: DashboardFilters = {}) {
+  const key = makeFilterCacheKey(filters);
+  return unstable_cache(() => getDashboardShellPayload(clientSlug, filters), ["dashboard-shell", clientSlug, key], {
+    revalidate: 60
+  })();
+}
+
+export async function getCachedDashboardAnalyticsPayload(clientSlug: string, filters: DashboardFilters = {}) {
+  const key = makeFilterCacheKey(filters);
+  return unstable_cache(() => getDashboardAnalyticsPayload(clientSlug, filters), ["dashboard-analytics", clientSlug, key], {
+    revalidate: 60
+  })();
 }
 
 export async function getDashboardPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardPayload | null> {

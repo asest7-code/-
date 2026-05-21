@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { getClientBySlug } from "@/lib/data-service";
-import { getDashboardAnalyticsPayload } from "@/lib/dashboard-service";
+import { getCachedDashboardAnalyticsPayload } from "@/lib/dashboard-service";
 import { getDemoDashboardPayload } from "@/services/report/demo-data";
 
 export async function GET(request: Request, { params }: { params: { clientSlug: string } }) {
@@ -32,7 +32,7 @@ export async function GET(request: Request, { params }: { params: { clientSlug: 
     if (!ok) return NextResponse.json({ passwordRequired: true }, { status: 401 });
   }
 
-  const payload = await getDashboardAnalyticsPayload(params.clientSlug, {
+  const payload = await getCachedDashboardAnalyticsPayload(params.clientSlug, {
     startDate: url.searchParams.get("startDate") ?? undefined,
     endDate: url.searchParams.get("endDate") ?? undefined,
     platform: url.searchParams.get("platform") ?? undefined,
