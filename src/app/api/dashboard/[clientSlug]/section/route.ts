@@ -7,6 +7,17 @@ import { listScopedReports } from "@/lib/data-service";
 import { filterDemoRows, makeDemoRows } from "@/services/report/demo-data";
 import type { DashboardFilters, DashboardSectionId, DashboardSectionPayload, ReportRow } from "@/types/dashboard";
 
+function toDateOnly(value: Date | string) {
+  return typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10);
+}
+
+function normalizeRows<T extends { date: Date | string }>(rows: T[]): Array<Omit<T, "date"> & { date: string }> {
+  return rows.map((row) => ({
+    ...row,
+    date: toDateOnly(row.date)
+  }));
+}
+
 function readFilters(url: URL): DashboardFilters {
   return {
     startDate: url.searchParams.get("startDate") ?? undefined,
@@ -154,7 +165,7 @@ export async function GET(request: Request, { params }: { params: { clientSlug: 
   if (access.status === 404) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (access.status === 401) return NextResponse.json({ passwordRequired: true }, { status: 401 });
 
-  const currentRows = await listScopedReports({
+  const currentRowsRaw = await listScopedReports({
     clientId: access.client.id,
     startDate: filters.startDate,
     endDate: filters.endDate,
@@ -168,7 +179,7 @@ export async function GET(request: Request, { params }: { params: { clientSlug: 
     adType: filters.adType
   });
 
-  const previousRows =
+  const previousRowsRaw =
     compareRange.previousStartDate && compareRange.previousEndDate
       ? await listScopedReports({
           clientId: access.client.id,
@@ -185,5 +196,8 @@ export async function GET(request: Request, { params }: { params: { clientSlug: 
         })
       : [];
 
-  return NextResponse.json(createSectionPayload(section, subSection, currentRows as ReportRow[], previousRows as ReportRow[]));
+  const currentRows = normalizeRows(currentRowsRaw) as ReportRow[];
+  const previousRows = normalizeRows(previousRowsRaw) as ReportRow[];
+
+  return NextResponse.json(createSectionPayload(section, subSection, currentRows, previousRows));
 }
