@@ -7,6 +7,7 @@ import { DashboardInsights } from "@/components/dashboard/dashboard-insights";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { ReportTable } from "@/components/dashboard/report-table";
 import type { DashboardAnalyticsPayload, DashboardShellPayload } from "@/types/dashboard";
+import { formatRoas } from "@/utils/metrics";
 
 type FilterState = {
   startDate: string;
@@ -340,7 +341,7 @@ export function DashboardContent({
           <KpiCard title="CPC" value={payload.summary.cpc} format="currency" />
           <KpiCard title="CPA" value={payload.summary.cpa} format="currency" change={payload.summary.changes.cpa} />
           <KpiCard title="CVR" value={payload.summary.cvr} format="percent" />
-          <KpiCard title="ROAS" value={payload.summary.roas} format="percent" change={payload.summary.changes.roas} />
+          <KpiCard title="ROAS" value={payload.summary.roas} format="roas" change={payload.summary.changes.roas} />
         </section>
 
         {reportMode ? <ReportSummary summary={payload.summary} analytics={analytics} loading={analyticsLoading} /> : null}
@@ -390,14 +391,14 @@ function ReportSummary({
         <p className="mt-4 text-sm font-semibold text-emerald-700">성과 우수</p>
         <ul className="mt-2 space-y-2 text-sm">
           {top.map((row) => (
-            <li key={row.campaignName}>{row.campaignName} / ROAS {row.roas}%</li>
+            <li key={row.campaignName}>{row.campaignName} / ROAS {formatRoas(row.roas)}</li>
           ))}
         </ul>
 
         <p className="mt-5 text-sm font-semibold text-red-700">개선 필요</p>
         <ul className="mt-2 space-y-2 text-sm">
           {weak.map((row) => (
-            <li key={row.campaignName}>{row.campaignName} / ROAS {row.roas}%</li>
+            <li key={row.campaignName}>{row.campaignName} / ROAS {formatRoas(row.roas)}</li>
           ))}
         </ul>
       </div>

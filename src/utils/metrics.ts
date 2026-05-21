@@ -152,3 +152,18 @@ export function groupByKey(rows: ReportRow[], key: keyof Pick<ReportRow, "platfo
 export function currency(value: number) {
   return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value);
 }
+
+export function formatNumber(value: number) {
+  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value);
+}
+
+export function formatPercent(value: number, digits = 1) {
+  return `${new Intl.NumberFormat("ko-KR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  }).format(value)}%`;
+}
+
+export function formatRoas(value: number) {
+  return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value)}%`;
+}

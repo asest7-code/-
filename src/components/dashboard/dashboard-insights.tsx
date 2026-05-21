@@ -1,7 +1,7 @@
 "use client";
 
 import type { DashboardAnalyticsPayload, DashboardShellPayload } from "@/types/dashboard";
-import { currency } from "@/utils/metrics";
+import { currency, formatPercent, formatRoas } from "@/utils/metrics";
 
 export function DashboardInsights({
   summary,
@@ -61,15 +61,15 @@ function buildInsights(summary: DashboardShellPayload["summary"], analytics: Das
       title: "전체 성과 요약",
       body:
         roasChange === null
-          ? `이번 조회 기간의 총 광고비는 ${currency(summary.cost)}, 매출은 ${currency(summary.revenue)}이며 ROAS는 ${summary.roas}%입니다. 비교 가능한 직전 동일 기간 데이터가 충분하지 않아 이번 성과를 기준값으로 해석하는 편이 적절합니다.`
-          : `이번 조회 기간의 총 광고비는 ${currency(summary.cost)}, 매출은 ${currency(summary.revenue)}, ROAS는 ${summary.roas}%입니다. 직전 동일 기간 대비 매출은 ${formatChange(revenueChange)}, 전환수는 ${formatChange(conversionChange)}, ROAS는 ${formatChange(roasChange)}로 확인됩니다.`
+          ? `이번 조회 기간의 총 광고비는 ${currency(summary.cost)}, 매출은 ${currency(summary.revenue)}이며 ROAS는 ${formatRoas(summary.roas)}입니다. 비교 가능한 직전 동일 기간 데이터가 충분하지 않아 이번 성과를 기준값으로 해석하는 편이 적절합니다.`
+          : `이번 조회 기간의 총 광고비는 ${currency(summary.cost)}, 매출은 ${currency(summary.revenue)}, ROAS는 ${formatRoas(summary.roas)}입니다. 직전 동일 기간 대비 매출은 ${formatChange(revenueChange)}, 전환수는 ${formatChange(conversionChange)}, ROAS는 ${formatChange(roasChange, true)}로 확인됩니다.`
     },
     {
       title: "매체 운영 평가",
       body: bestPlatform
-        ? `${bestPlatform.platform} 매체가 ROAS ${bestPlatform.roas}%로 가장 높은 효율을 보이고 있습니다. ${
+        ? `${bestPlatform.platform} 매체가 ROAS ${formatRoas(bestPlatform.roas)}로 가장 높은 효율을 보이고 있습니다. ${
             weakPlatform && weakPlatform.platform !== bestPlatform.platform
-              ? `${weakPlatform.platform}는 ROAS ${weakPlatform.roas}% 수준으로 상대적으로 낮아 예산 재배분 또는 소재/랜딩 점검이 필요해 보입니다.`
+              ? `${weakPlatform.platform}는 ROAS ${formatRoas(weakPlatform.roas)} 수준으로 상대적으로 낮아 예산 재배분 또는 소재/랜딩 점검이 필요해 보입니다.`
               : "현재 효율 좋은 매체 중심 운영 기조를 유지하면서 추가 확장 가능성을 검토해볼 수 있습니다."
           }`
         : "매체별 성과를 비교할 만큼 집계 데이터가 충분하지 않습니다."
@@ -77,9 +77,9 @@ function buildInsights(summary: DashboardShellPayload["summary"], analytics: Das
     {
       title: "캠페인 성과 해석",
       body: topCampaign
-        ? `${topCampaign.campaignName} 캠페인이 ROAS ${topCampaign.roas}%로 가장 우수한 흐름을 보입니다. ${
+        ? `${topCampaign.campaignName} 캠페인이 ROAS ${formatRoas(topCampaign.roas)}로 가장 우수한 흐름을 보입니다. ${
             lowCampaign && lowCampaign.campaignName !== topCampaign.campaignName
-              ? `${lowCampaign.campaignName} 캠페인은 ROAS ${lowCampaign.roas}%로 상대적으로 낮아 타겟, 소재, 랜딩 구조를 우선적으로 다시 점검하는 편이 좋겠습니다.`
+              ? `${lowCampaign.campaignName} 캠페인은 ROAS ${formatRoas(lowCampaign.roas)}로 상대적으로 낮아 타겟, 소재, 랜딩 구조를 우선적으로 다시 점검하는 편이 좋겠습니다.`
               : "상위 캠페인의 효율이 안정적으로 유지되고 있어 예산 확대 테스트를 검토할 수 있습니다."
           }`
         : "캠페인 단위 평가를 진행할 만큼 데이터가 충분하지 않습니다."
@@ -87,7 +87,7 @@ function buildInsights(summary: DashboardShellPayload["summary"], analytics: Das
     {
       title: "다음 운영 제안",
       body: highSpendLowReturn
-        ? `${highSpendLowReturn.campaignName} 캠페인은 광고비 ${currency(highSpendLowReturn.cost)} 집행 대비 ROAS ${highSpendLowReturn.roas}%로 확인됩니다. ${
+        ? `${highSpendLowReturn.campaignName} 캠페인은 광고비 ${currency(highSpendLowReturn.cost)} 집행 대비 ROAS ${formatRoas(highSpendLowReturn.roas)}로 확인됩니다. ${
             costChange !== null && revenueChange !== null && costChange > revenueChange
               ? "현재는 비용 증가 속도가 매출 증가보다 빠른 구간으로 보여, 저효율 캠페인 정리와 고효율 매체 재배분을 먼저 검토하는 쪽이 적절합니다."
               : "저효율 구간을 정리하면서 상위 ROAS 캠페인에 예산을 재배치하면 전체 수익성 개선 여지가 있어 보입니다."
@@ -97,8 +97,8 @@ function buildInsights(summary: DashboardShellPayload["summary"], analytics: Das
   ];
 }
 
-function formatChange(value: number | null) {
+function formatChange(value: number | null, roas = false) {
   if (value === null) return "비교 불가";
   if (value === 0) return "보합";
-  return `${value > 0 ? "+" : ""}${value}%`;
+  return `${value > 0 ? "+" : ""}${roas ? formatRoas(value) : formatPercent(value, 1)}`;
 }

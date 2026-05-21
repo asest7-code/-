@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { currency } from "@/utils/metrics";
+import { currency, formatNumber, formatPercent, formatRoas } from "@/utils/metrics";
 
 type GroupMode = "date" | "campaign" | "adGroup";
 type SortKey = "dateDesc" | "cost" | "revenue" | "conversions" | "clicks" | "roas";
@@ -184,16 +184,16 @@ export function ReportTable({ clientSlug, filters, password = "" }: ReportTableP
                 <td className="px-3 py-3">{row.platform}</td>
                 <td className="px-3 py-3">{row.campaignName || "-"}</td>
                 <td className="px-3 py-3">{row.adGroupName || "-"}</td>
-                <td className="px-3 py-3">{row.rowCount.toLocaleString("ko-KR")}</td>
-                <td className="px-3 py-3">{row.metrics.impressions.toLocaleString("ko-KR")}</td>
-                <td className="px-3 py-3">{row.metrics.clicks.toLocaleString("ko-KR")}</td>
+                <td className="px-3 py-3">{formatNumber(row.rowCount)}</td>
+                <td className="px-3 py-3">{formatNumber(row.metrics.impressions)}</td>
+                <td className="px-3 py-3">{formatNumber(row.metrics.clicks)}</td>
                 <td className="px-3 py-3">{currency(row.metrics.cost)}원</td>
-                <td className="px-3 py-3">{row.metrics.conversions.toLocaleString("ko-KR")}</td>
+                <td className="px-3 py-3">{formatNumber(row.metrics.conversions)}</td>
                 <td className="px-3 py-3">{currency(row.metrics.revenue)}원</td>
-                <td className="px-3 py-3">{row.metrics.ctr}%</td>
+                <td className="px-3 py-3">{formatPercent(row.metrics.ctr, 1)}</td>
                 <td className="px-3 py-3">{currency(row.metrics.cpc)}원</td>
                 <td className="px-3 py-3">{currency(row.metrics.cpa)}원</td>
-                <td className="px-3 py-3 font-bold text-brand-700">{row.metrics.roas}%</td>
+                <td className="px-3 py-3 font-bold text-brand-700">{formatRoas(row.metrics.roas)}</td>
                 {groupMode === "date" ? (
                   <>
                     <td className="px-3 py-3">{formatDelta(row.dayOverDay?.cost, "currency")}</td>
@@ -217,7 +217,7 @@ export function ReportTable({ clientSlug, filters, password = "" }: ReportTableP
 
       <div className="flex items-center justify-between border-t p-4 text-sm">
         <span>
-          총 {total.toLocaleString("ko-KR")}개 / {page}페이지
+          총 {formatNumber(total)}개 / {page}페이지
         </span>
         <div className="flex gap-2">
           <button className="btn-secondary" disabled={page === 1 || loading} onClick={() => setPage((value) => Math.max(1, value - 1))}>
@@ -244,8 +244,8 @@ function formatDelta(value: number | null | undefined, format: "currency" | "num
   }
 
   if (format === "percent") {
-    return `${prefix}${absoluteValue.toLocaleString("ko-KR")} %p`;
+    return `${prefix}${formatRoas(absoluteValue)}`;
   }
 
-  return `${prefix}${absoluteValue.toLocaleString("ko-KR")}`;
+  return `${prefix}${formatNumber(absoluteValue)}`;
 }
