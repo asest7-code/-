@@ -890,7 +890,7 @@ export async function createAccessLog(clientId: string, ipAddress: string | null
   await writeLocalDb(db);
 }
 
-export async function listEditableReports(params: { clientId?: string; query?: string; page?: number; pageSize?: number }) {
+export async function listEditableReports(params: { clientId?: string; uploadId?: string; query?: string; page?: number; pageSize?: number }) {
   const dbMode = await canUsePrisma();
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 20;
@@ -899,6 +899,7 @@ export async function listEditableReports(params: { clientId?: string; query?: s
   if (dbMode) {
     const where: Prisma.CampaignReportWhereInput = {
       ...(params.clientId && params.clientId !== "ALL" ? { clientId: params.clientId } : {}),
+      ...(params.uploadId ? { uploadId: params.uploadId } : {}),
       ...(query
         ? {
             OR: [
@@ -933,6 +934,9 @@ export async function listEditableReports(params: { clientId?: string; query?: s
   }));
   if (params.clientId && params.clientId !== "ALL") {
     rows = rows.filter((row) => row.clientId === params.clientId);
+  }
+  if (params.uploadId) {
+    rows = rows.filter((row) => row.uploadId === params.uploadId);
   }
   if (query) {
     rows = rows.filter((row) => [row.platform, row.campaignName, row.adGroupName, row.adName].join(" ").toLowerCase().includes(query));
@@ -1017,4 +1021,29 @@ export async function deleteReport(id: string) {
   const db = await readLocalDb();
   db.reports = db.reports.filter((report) => report.id !== id);
   await writeLocalDb(db);
+}
+
+export async function deleteReports(ids: string[]) {
+  if (ids.length === 0) return 0;
+
+  if (await canUsePrisma()) {
+    const result = await prisma.campaignReport.deleteMany({
+      where: {
+        id: {
+          in: ids
+        }
+      }
+    });
+    return result.count;
+  }
+
+  if (isVercelRuntime()) {
+    throw new Error("Database connection is unavailable in Vercel runtime.");
+  }
+
+  const db = await readLocalDb();
+  const before = db.reports.length;
+  db.reports = db.reports.filter((report) => !ids.includes(report.id));
+  await writeLocalDb(db);
+  return before - db.reports.length;
 }
