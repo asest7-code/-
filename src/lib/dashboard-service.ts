@@ -27,9 +27,8 @@ function toReportRow(row: {
   return { ...row, date: typeof row.date === "string" ? row.date.slice(0, 10) : format(row.date, "yyyy-MM-dd") };
 }
 
-async function getResolvedDashboardData(clientSlug: string, filters: DashboardFilters = {}) {
+async function resolveDashboardBase(clientSlug: string, filters: DashboardFilters = {}) {
   const client = await getClientBySlug(clientSlug);
-
   if (!client) return null;
 
   const dateRange = await getReportDateRange(client.id);
@@ -51,29 +50,33 @@ async function getResolvedDashboardData(clientSlug: string, filters: DashboardFi
 
   const previousRange = getPreviousRange(scopedFilters.startDate, scopedFilters.endDate);
 
-  const [currentRowsRaw, filterOptions, currentTotals, previousTotals] = await Promise.all([
-    listScopedReports({
-      clientId: client.id,
-      startDate: scopedFilters.startDate,
-      endDate: scopedFilters.endDate,
-      platform: scopedFilters.platform,
-      campaignName: scopedFilters.campaign
-    }),
-    listDistinctClientOptions(client.id),
+  return {
+    client,
+    scopedFilters,
+    previousRange
+  };
+}
+
+export async function getDashboardShellPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardShellPayload | null> {
+  const resolved = await resolveDashboardBase(clientSlug, filters);
+  if (!resolved) return null;
+
+  const [filterOptions, currentTotals, previousTotals] = await Promise.all([
+    listDistinctClientOptions(resolved.client.id),
     aggregateScopedReportMetrics({
-      clientId: client.id,
-      startDate: scopedFilters.startDate,
-      endDate: scopedFilters.endDate,
-      platform: scopedFilters.platform,
-      campaignName: scopedFilters.campaign
+      clientId: resolved.client.id,
+      startDate: resolved.scopedFilters.startDate,
+      endDate: resolved.scopedFilters.endDate,
+      platform: resolved.scopedFilters.platform,
+      campaignName: resolved.scopedFilters.campaign
     }),
-    previousRange.previousStartDate && previousRange.previousEndDate
+    resolved.previousRange.previousStartDate && resolved.previousRange.previousEndDate
       ? aggregateScopedReportMetrics({
-          clientId: client.id,
-          startDate: previousRange.previousStartDate,
-          endDate: previousRange.previousEndDate,
-          platform: scopedFilters.platform,
-          campaignName: scopedFilters.campaign
+          clientId: resolved.client.id,
+          startDate: resolved.previousRange.previousStartDate,
+          endDate: resolved.previousRange.previousEndDate,
+          platform: resolved.scopedFilters.platform,
+          campaignName: resolved.scopedFilters.campaign
         })
       : Promise.resolve({
           cost: 0,
@@ -84,12 +87,44 @@ async function getResolvedDashboardData(clientSlug: string, filters: DashboardFi
         })
   ]);
 
-  const currentRows = currentRowsRaw.map(toReportRow);
   const currentMetrics = calculateMetricsFromTotals(currentTotals);
   const previousMetrics = calculateMetricsFromTotals(previousTotals);
   const summary = compareMetrics(currentMetrics, previousMetrics);
   const platforms = Array.from(new Set(filterOptions.map((row) => row.platform))).sort();
   const campaigns = Array.from(new Set(filterOptions.map((row) => row.campaignName))).sort();
+
+  return {
+    client: {
+      id: resolved.client.id,
+      name: resolved.client.name,
+      slug: resolved.client.slug,
+      logoUrl: resolved.client.logoUrl,
+      isPasswordProtected: resolved.client.isPasswordProtected
+    },
+    filters: {
+      platforms,
+      campaigns,
+      startDate: resolved.scopedFilters.startDate,
+      endDate: resolved.scopedFilters.endDate
+    },
+    summary,
+    previous: previousMetrics
+  };
+}
+
+export async function getDashboardAnalyticsPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardAnalyticsPayload | null> {
+  const resolved = await resolveDashboardBase(clientSlug, filters);
+  if (!resolved) return null;
+
+  const currentRowsRaw = await listScopedReports({
+    clientId: resolved.client.id,
+    startDate: resolved.scopedFilters.startDate,
+    endDate: resolved.scopedFilters.endDate,
+    platform: resolved.scopedFilters.platform,
+    campaignName: resolved.scopedFilters.campaign
+  });
+
+  const currentRows = currentRowsRaw.map(toReportRow);
 
   const timeSeries = groupByDate(currentRows).map((item) => ({
     date: item.date,
@@ -113,67 +148,41 @@ async function getResolvedDashboardData(clientSlug: string, filters: DashboardFi
     .map(([campaignName, rows]) => ({ campaignName, ...calculateMetrics(rows) }))
     .sort((a, b) => b.roas - a.roas);
 
-  const basePayload = {
-    client: {
-      id: client.id,
-      name: client.name,
-      slug: client.slug,
-      logoUrl: client.logoUrl,
-      isPasswordProtected: client.isPasswordProtected
-    },
-    filters: {
-      platforms,
-      campaigns,
-      startDate: scopedFilters.startDate,
-      endDate: scopedFilters.endDate
-    },
-    summary,
-    previous: previousMetrics
-  };
+  const shell = await getDashboardShellPayload(clientSlug, filters);
+  if (!shell) return null;
 
   const reportSummaryInput = {
-    summary,
+    summary: shell.summary,
     platformBreakdown,
     campaignRankings
   };
 
   return {
-    client,
-    currentRows,
-    basePayload,
-    analytics: {
-      timeSeries,
-      platformBreakdown,
-      campaignRankings,
-      reportText: generateReportSummary(reportSummaryInput)
-    }
+    timeSeries,
+    platformBreakdown,
+    campaignRankings,
+    reportText: generateReportSummary(reportSummaryInput)
   };
 }
 
-export async function getDashboardShellPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardShellPayload | null> {
-  const resolved = await getResolvedDashboardData(clientSlug, filters);
-
-  if (!resolved) return null;
-
-  return resolved.basePayload;
-}
-
-export async function getDashboardAnalyticsPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardAnalyticsPayload | null> {
-  const resolved = await getResolvedDashboardData(clientSlug, filters);
-
-  if (!resolved) return null;
-
-  return resolved.analytics;
-}
-
 export async function getDashboardPayload(clientSlug: string, filters: DashboardFilters = {}): Promise<DashboardPayload | null> {
-  const resolved = await getResolvedDashboardData(clientSlug, filters);
+  const [shell, analytics] = await Promise.all([getDashboardShellPayload(clientSlug, filters), getDashboardAnalyticsPayload(clientSlug, filters)]);
+  if (!shell || !analytics) return null;
 
+  const resolved = await resolveDashboardBase(clientSlug, filters);
   if (!resolved) return null;
+
+  const currentRowsRaw = await listScopedReports({
+    clientId: resolved.client.id,
+    startDate: resolved.scopedFilters.startDate,
+    endDate: resolved.scopedFilters.endDate,
+    platform: resolved.scopedFilters.platform,
+    campaignName: resolved.scopedFilters.campaign
+  });
 
   return {
-    ...resolved.basePayload,
-    ...resolved.analytics,
-    rows: resolved.currentRows
+    ...shell,
+    ...analytics,
+    rows: currentRowsRaw.map(toReportRow)
   };
 }
